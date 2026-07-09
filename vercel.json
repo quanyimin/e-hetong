@@ -1,0 +1,12 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npx prisma generate && npx prisma db push && npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "regions": ["hnd1"],
+  "env": {
+    "VERCEL_DEPLOY": "1",
+    "NEXT_PUBLIC_APP_URL": "https://e-hetong.vercel.app"
+  },
+  "crons": []
+}

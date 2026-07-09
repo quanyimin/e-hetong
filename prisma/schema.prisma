@@ -1,0 +1,438 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String?   @unique
+  phone           String?   @unique
+  wechatOpenId    String?   @unique @map("wechat_openid")
+  name            String?
+  avatarUrl       String?   @map("avatar_url")
+  memberLevel     String    @default("free") @map("member_level")
+  memberExpireAt  DateTime? @map("member_expire_at")
+  role            String    @default("user")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  inviteCode        String?   @unique @map("invite_code")
+  invitedBy         String?   @map("invited_by")
+  contractBonus     Int       @default(0) @map("contract_bonus")
+  totalEarned       Float     @default(0) @map("total_earned")
+  withdrawable      Float     @default(0) @map("withdrawable")
+  distributorLevel  String    @default("none") @map("distributor_level")
+  distributorSince  DateTime? @map("distributor_since")
+  distributorExpire DateTime? @map("distributor_expire")
+  vipMonths         Int       @default(0) @map("vip_months")    // 奖励VIP月数
+
+  contracts       Contract[]
+  orders          Order[]
+  reminders       Reminder[]
+  invitees        User[]                @relation("InviteRelation")
+  inviter         User?                 @relation("InviteRelation", fields: [invitedBy], references: [id])
+  customers       DistributorCustomer[] @relation("OwnerDistributor")
+  distributorOf   DistributorCustomer[] @relation("CustomerDistributor")
+  commissions     Commission[]          @relation("CommissionDistributor")
+  customerCommissions Commission[]      @relation("CommissionCustomer")
+  withdrawals     Withdrawal[]
+  folders         ContractFolder[]
+  tenantRoles     UserTenantRole[]
+  partners        Partner[]
+  personalSpace   PersonalSpace?        @relation("UserPersonalSpace")
+
+  @@map("users")
+}
+
+// ===== 多租户：企业/个人主体 =====
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("PERSONAL") // PERSONAL | INDIVIDUAL | ENTERPRISE
+  sceneType String   @default("GENERAL")
+  industry  String?
+  industryVersionId String? @map("industry_version_id")
+  planId    String?
+  ownerId   String   @map("owner_id")
+  creditCode String? @map("credit_code")
+  contactName String? @map("contact_name")
+  contactPhone String? @map("contact_phone")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  roles         UserTenantRole[]
+  enabledScenes TenantEnabledScene[]
+  industryVersion IndustryVersion? @relation(fields: [industryVersionId], references: [id])
+
+  @@map("tenants")
+}
+
+model UserTenantRole {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tenantId  String   @map("tenant_id")
+  role      String   @default("VIEWER") // OWNER | ADMIN | EDITOR | VIEWER
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@map("user_tenant_roles")
+}
+
+model TenantEnabledScene {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  sceneId   String   @map("scene_id")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sceneId])
+  @@map("tenant_enabled_scenes")
+}
+
+model IndustryVersion {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  icon        String?  @default("LayoutDashboard")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  config      String?  // JSON 配置
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenants  Tenant[]
+  scenes   IndustryVersionScene[]
+
+  @@map("industry_versions")
+}
+
+model IndustryVersionScene {
+  id        String  @id @default(cuid())
+  versionId String  @map("version_id")
+  sceneId   String  @map("scene_id")
+  isDefault Boolean @default(true) @map("is_default")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  version IndustryVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  scene   IndustryScene   @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId, sceneId])
+  @@map("industry_version_scenes")
+}
+
+model IndustryScene {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  icon        String?
+  description String?
+  route       String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true)
+  pluginId    String?  @map("plugin_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  versions IndustryVersionScene[]
+  plugins  PluginDefinition[]
+
+  @@map("industry_scenes")
+}
+
+// ===== 个人空间：用户个性化配置 =====
+model PersonalSpace {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  defaultTenantId String?  @map("default_tenant_id")
+  quickTemplates  String?  @map("quick_templates")  // JSON：个人快捷模板列表
+  customKeywords  String?  @map("custom_keywords")  // JSON：自定义关键词识别规则
+  recentContracts String?  @map("recent_contracts") // JSON：最近浏览合同ID列表
+  pinnedContracts String?  @map("pinned_contracts") // JSON：置顶合同ID列表
+  preferences     String?  // JSON：UI偏好、布局、默认视图等
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation("UserPersonalSpace", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("personal_spaces")
+}
+
+// ===== 插件定义：行业/企业级功能插件 =====
+model PluginDefinition {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  description  String?
+  icon         String?  @default("Puzzle")
+  version      String   @default("1.0.0")
+  type         String   @default("INDUSTRY")  // SYSTEM | INDUSTRY | CUSTOM
+  sceneId      String?  @map("scene_id")
+  configSchema String?  @map("config_schema") // JSON：前端动态表单配置
+  entryPoint   String?  @map("entry_point")   // 前端模块路径
+  apiEndpoint  String?  @map("api_endpoint")  // 后端API前缀
+  status       String   @default("active")
+  isPaid       Boolean  @default(false) @map("is_paid")
+  price        Float    @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  scene IndustryScene? @relation(fields: [sceneId], references: [id])
+
+  @@map("plugin_definitions")
+}
+
+// ===== 合同文件夹 =====
+model ContractFolder {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  parentId  String?  @map("parent_id")
+  sortOrder Int      @default(0) @map("sort_order")
+  color     String?  // 颜色标识
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   ContractFolder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children ContractFolder[] @relation("FolderHierarchy")
+  contracts Contract[]      @relation("FolderContracts")
+
+  @@unique([userId, name])
+  @@map("contract_folders")
+}
+
+model DistributorCustomer {
+  id             String   @id @default(cuid())
+  distributorId  String   @map("distributor_id")
+  customerId     String   @map("customer_id")
+  relationType   String   @default("customer")
+  commissionRate Float?   @map("commission_rate")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  distributor User @relation("OwnerDistributor", fields: [distributorId], references: [id])
+  customer    User @relation("CustomerDistributor", fields: [customerId], references: [id])
+
+  @@unique([distributorId, customerId])
+  @@map("distributor_customers")
+}
+
+model Commission {
+  id             String   @id @default(cuid())
+  orderId        String   @map("order_id")
+  distributorId  String   @map("distributor_id")
+  customerId     String   @map("customer_id")
+  orderAmount    Float    @map("order_amount")
+  commissionRate Float    @map("commission_rate")
+  commissionAmt  Float    @map("commission_amt")
+  status         String   @default("pending")
+  settledAt      DateTime? @map("settled_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  order       Order @relation(fields: [orderId], references: [id])
+  distributor User  @relation("CommissionDistributor", fields: [distributorId], references: [id])
+  customer    User  @relation("CommissionCustomer", fields: [customerId], references: [id])
+
+  @@index([distributorId])
+  @@index([orderId])
+  @@index([status])
+  @@map("commissions")
+}
+
+model Withdrawal {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  amount      Float
+  bankName    String?   @map("bank_name")
+  bankAccount String?   @map("bank_account")
+  accountName String?   @map("account_name")
+  status      String    @default("pending")
+  remark      String?
+  approvedAt  DateTime? @map("approved_at")
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("withdrawals")
+}
+
+model Contract {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  name        String
+  type        String?
+  partyA      String?  @map("party_a")
+  partyB      String?  @map("party_b")
+  amount      Float?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  fileUrl     String?  @map("file_url")
+  fileType    String?  @map("file_type")
+  ocrText     String?  @map("ocr_text")
+  parsedData  String?  @map("parsed_data")
+  parseStatus String   @default("pending") @map("parse_status")
+  tags        String?
+  keywords    String?  // JSON数组 ["采购","年度"]
+  summary     String?
+  riskAlerts  String?  // JSON数组
+  keyClauses  String?  // JSON数组
+  remark      String?
+  folderId    String?  @map("folder_id")
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders Reminder[]
+  folder   ContractFolder? @relation("FolderContracts", fields: [folderId], references: [id])
+
+  // === Phase 2 补充字段（临时兼容 Phase 1 编译） ===
+  tenantId      String?  @map("tenant_id")
+  status        String   @default("ACTIVE") // ACTIVE | EXPIRED | TERMINATED
+  financialType String?  @map("financial_type") // INCOME | EXPENSE
+  category      String?
+  partnerId     String?  @map("partner_id")
+  sceneConfig   String?  @map("scene_config")  // JSON 行业场景配置
+  direction     String?  // IN(收款) | OUT(支出)
+  source        String?  // UPLOAD | OCR | IMPORT | SYNC
+
+  partner  Partner? @relation(fields: [partnerId], references: [id])
+  bills    Bill[]
+
+  // === Phase 4：搜索增强 ===
+  searchText String? @map("search_text") // 预拼接的可搜索文本（name+partyA+partyB+tags）
+
+  @@index([userId])
+  @@index([folderId])
+  @@index([parseStatus])
+  @@index([createdAt])
+  @@index([endDate])
+  @@index([tenantId])
+  @@index([status])
+  @@index([searchText])
+  @@map("contracts")
+}
+
+model Reminder {
+  id         String    @id @default(cuid())
+  contractId String    @map("contract_id")
+  userId     String    @map("user_id")
+  remindAt   DateTime  @map("remind_at")
+  remindType String    @default("expire") @map("remind_type")
+  title      String?
+  message    String?
+  sendStatus String    @default("pending") @map("send_status")
+  sentAt     DateTime? @map("sent_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tenantId String? @map("tenant_id")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([remindAt])
+  @@index([sendStatus])
+  @@index([tenantId])
+  @@map("reminders")
+}
+
+// ===== 套餐定义（Phase 2 正式启用） =====
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  level       Int      @default(0)
+  price       Float    @default(0)
+  description String?
+  features    String?  // JSON
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("subscription_plans")
+}
+
+// ===== 合作伙伴（Phase 2 正式启用） =====
+model Partner {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tenantId  String?  @map("tenant_id")
+  name      String
+  phone     String?
+  company   String?
+  remark    String?
+  type      String?  // supplier | customer | tenant | other
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id])
+  contracts Contract[]
+  bills     Bill[]
+
+  @@index([userId])
+  @@map("partners")
+}
+
+// ===== 账单/流水（Phase 2 正式启用） =====
+model Bill {
+  id         String   @id @default(cuid())
+  contractId String   @map("contract_id")
+  tenantId   String?  @map("tenant_id")
+  partnerId  String?  @map("partner_id")
+  title      String?
+  amount     Float    @default(0)
+  paidAmount Float    @default(0) @map("paid_amount")
+  lateFee    Float?   @map("late_fee")
+  type       String   // INCOME | EXPENSE
+  category   String?
+  status     String   @default("pending")
+  dueDate    DateTime? @map("due_date")
+  paidAt     DateTime? @map("paid_at")
+  remark     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  partner  Partner? @relation(fields: [partnerId], references: [id])
+
+  @@index([contractId])
+  @@map("bills")
+}
+
+model Order {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  orderNo       String    @unique @map("order_no")
+  planType      String    @map("plan_type")
+  amount        Float
+  currency      String    @default("CNY")
+  paymentMethod String?   @map("payment_method")
+  paymentStatus String    @default("pending") @map("payment_status")
+  paidAt        DateTime? @map("paid_at")
+  expireAt      DateTime? @map("expire_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commissions Commission[]
+
+  @@index([userId])
+  @@index([orderNo])
+  @@index([paymentStatus])
+  @@map("orders")
+}
