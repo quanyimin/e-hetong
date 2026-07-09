@@ -80,7 +80,7 @@ export default function RegisterPage() {
       <Card className="shadow-xl max-w-md w-full">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <Link href="/" className="flex items-center gap-2"><FileText className="h-8 w-8 text-primary" /><span className="text-2xl font-bold"><span className="text-primary">易</span>合同</span></Link>
+            <Link href="/" className="flex items-center gap-2"><FileText className="h-8 w-8 text-primary" /><span className="text-2xl font-bold"><span className="text-primary">多多</span>合同管家</span></Link>
           </div>
           <CardTitle className="text-2xl">创建账号</CardTitle>
           <CardDescription>免费注册，即送5份合同额度</CardDescription>

@@ -50,7 +50,7 @@ export function Navbar() {
         <Link href="/" className="flex items-center gap-2">
           <FileText className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold tracking-tight">
-            <span className="text-primary">易</span>合同
+            <span className="text-primary">多多</span>合同管家
           </span>
         </Link>
 
