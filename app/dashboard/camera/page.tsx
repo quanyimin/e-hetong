@@ -80,12 +80,31 @@ export default function CameraPage() {
     reader.readAsDataURL(file);
   }
 
-  // OCR 识别
+  // OCR 识别（优先千帆 → 降级 Tesseract.js）
   async function runOCR(imageData: string) {
     setOcrStatus('processing');
     setOcrProgress(10);
     try {
-      // 动态导入 Tesseract.js（首次使用加载较慢）
+      // 第一步：尝试千帆 OCR（服务器端，更准确）
+      setOcrProgress(20);
+      const qianfanRes = await fetch('/api/ocr/qianfan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageData }),
+      });
+
+      if (qianfanRes.ok) {
+        const qianfanData = await qianfanRes.json();
+        if (qianfanData.text && qianfanData.text.trim().length > 5) {
+          setOcrProgress(100);
+          setOcrText(qianfanData.text);
+          setOcrStatus('done');
+          return;
+        }
+      }
+
+      // 第二步：千帆未配置或结果为空，降级到 Tesseract.js
+      console.log('[OCR] 千帆不可用，降级到 Tesseract.js');
       const Tesseract = await import('tesseract.js');
       setOcrProgress(30);
 
