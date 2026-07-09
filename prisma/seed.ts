@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { SEED_TEMPLATES } from '../lib/templates/seed-templates';
 
 const prisma = new PrismaClient();
 
@@ -57,7 +58,64 @@ async function main() {
   }
 
   console.log('✅ 场景-版本关联初始化完成');
-  console.log('🎉 种子数据初始化全部完成');
+
+  // Phase 2: 填充行业模板
+  console.log('\n📋 开始填充行业模板...');
+
+  // 查找行业场景ID
+  const landlord = await prisma.industryScene.findFirst({ where: { code: 'LANDLORD' } });
+  const restaurant = await prisma.industryScene.findFirst({ where: { code: 'RESTAURANT' } });
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const tpl of SEED_TEMPLATES) {
+    // 检查是否已存在同名模板
+    const existing = await prisma.contractTemplate.findFirst({
+      where: { name: tpl.name, type: tpl.type },
+    });
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    // 确定 sceneId
+    let sceneId: string | undefined;
+    if (tpl.industry === 'LANDLORD' && landlord) sceneId = landlord.id;
+    else if (tpl.industry === 'RESTAURANT' && restaurant) sceneId = restaurant.id;
+
+    await prisma.contractTemplate.create({
+      data: {
+        name: tpl.name,
+        industry: tpl.industry,
+        type: tpl.type,
+        description: tpl.description,
+        content: tpl.content,
+        isOfficial: tpl.isOfficial,
+        usageCount: tpl.usageCount,
+        sceneId,
+      },
+    });
+    created++;
+  }
+
+  console.log(`✅ 模板填充完成！新建 ${created} 个模板，跳过 ${skipped} 个已存在模板。`);
+  console.log(`   - 总计：${SEED_TEMPLATES.length} 个模板（通用5类 + 房东6类 + 餐饮6类）`);
+
+  // 显示按行业汇总
+  const total = await prisma.contractTemplate.count();
+  const byIndustry = await prisma.contractTemplate.groupBy({
+    by: ['industry'],
+    _count: true,
+  });
+  console.log('\n📊 模板库汇总:');
+  byIndustry.forEach(g => {
+    console.log(`   - ${g.industry || '通用'}: ${g._count} 个`);
+  });
+  console.log(`   - 总计: ${total} 个`);
+
+  console.log('\n🎉 种子数据初始化全部完成');
 }
 
 main()
