@@ -13,7 +13,7 @@ import { extractTextFromFile } from '@/lib/file-text-extractor';
 import { getPreviewType, docxToHtml, readFileAsArrayBuffer, getPdfBlobUrl } from '@/lib/file-preview';
 import {
   Upload, FileText, X, CheckCircle2, Loader2, AlertCircle, Brain, Sparkles,
-  Camera, Crown, AlertTriangle, Save, Eye, DollarSign, Tag, Maximize2,
+  Camera, Crown, AlertTriangle, Save, Eye, DollarSign, Tag, Maximize2, ExternalLink,
 } from 'lucide-react';
 
 interface AIParseResult {
@@ -152,6 +152,41 @@ export default function UploadContractPage() {
   const isSupportCamera = typeof window !== 'undefined' && 'capture' in HTMLInputElement.prototype;
   const allArchived = files.length > 0 && files.every((f) => f.status === 'archived');
 
+  /** 全屏预览 Modal */
+  const FullscreenModal = ({ file, onClose }: { file: FileItem; onClose: () => void }) => {
+    const previewType = getPreviewType(file.ext);
+    React.useEffect(() => {
+      const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+      window.addEventListener('keydown', handleKey);
+      return () => window.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+        onClick={onClose}>
+        <div className="w-full h-full max-w-6xl max-h-[90vh] m-4 relative flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}>
+          <button onClick={onClose}
+            className="absolute top-2 right-2 z-10 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition-colors">
+            <X className="h-6 w-6" />
+          </button>
+          {previewType === 'image' && file.previewUrl ? (
+            <img src={file.previewUrl} alt="" className="max-w-full max-h-full object-contain" />
+          ) : previewType === 'pdf' && file.pdfUrl ? (
+            <iframe src={file.pdfUrl} className="w-full h-full rounded" title="PDF全屏预览" />
+          ) : previewType === 'docx' && file.docxHtml ? (
+            <div className="w-full h-full overflow-y-auto bg-white rounded-lg p-6 text-sm"
+              dangerouslySetInnerHTML={{ __html: file.docxHtml }} />
+          ) : (
+            <div className="text-white text-center">
+              <FileText className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <p>无法预览此文件类型</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   /** 文件预览组件 */
   const FilePreview = ({ file }: { file: FileItem }) => {
     const previewType = getPreviewType(file.ext);
@@ -159,17 +194,24 @@ export default function UploadContractPage() {
     switch (previewType) {
       case 'image':
         return file.previewUrl ? (
-          <img src={file.previewUrl} alt="" className="w-full object-contain max-h-80 cursor-pointer" onClick={() => setFullscreenFile(file)} />
+          <img src={file.previewUrl} alt="" className="w-full object-contain min-h-[300px] max-h-[55vh] cursor-pointer rounded border bg-muted/10"
+            onClick={() => setFullscreenFile(file)} />
         ) : null;
 
       case 'pdf':
         return file.pdfUrl ? (
           <div className="relative">
-            <iframe src={file.pdfUrl} className="w-full h-80 rounded border" title="PDF预览" />
-            <a href={file.pdfUrl} target="_blank" rel="noopener noreferrer"
-              className="absolute top-2 right-2 bg-background/90 rounded-md px-2 py-1 text-xs shadow-sm hover:bg-background flex items-center gap-1">
-              <Maximize2 className="h-3 w-3" />全屏
-            </a>
+            <iframe src={file.pdfUrl} className="w-full min-h-[300px] h-[55vh] rounded border" title="PDF预览" />
+            <div className="absolute top-2 right-2 flex gap-1">
+              <button onClick={() => setFullscreenFile(file)}
+                className="bg-background/90 rounded-md px-2 py-1 text-xs shadow-sm hover:bg-background flex items-center gap-1">
+                <Maximize2 className="h-3 w-3" />全屏
+              </button>
+              <a href={file.pdfUrl} target="_blank" rel="noopener noreferrer"
+                className="bg-background/90 rounded-md px-2 py-1 text-xs shadow-sm hover:bg-background flex items-center gap-1">
+                <ExternalLink className="h-3 w-3" />新窗口
+              </a>
+            </div>
           </div>
         ) : (
           <div className="border rounded-lg p-8 text-center bg-muted/20">
@@ -183,7 +225,7 @@ export default function UploadContractPage() {
 
       case 'docx':
         return file.docxHtml ? (
-          <div className="border rounded-lg p-4 max-h-80 overflow-y-auto bg-white text-sm"
+          <div className="border rounded-lg p-4 min-h-[300px] max-h-[55vh] overflow-y-auto bg-white text-sm"
             dangerouslySetInnerHTML={{ __html: file.docxHtml }} />
         ) : (
           <div className="border rounded-lg p-8 text-center bg-muted/20">
@@ -194,7 +236,7 @@ export default function UploadContractPage() {
 
       default:
         return (
-          <div className="border rounded-lg p-8 text-center bg-muted/20">
+          <div className="border rounded-lg p-8 text-center bg-muted/20 min-h-[300px] flex flex-col items-center justify-center">
             <FileText className="h-10 w-10 text-muted-foreground/50 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">{file.ext.toUpperCase()} 文件（{formatSize(file.size)}）</p>
           </div>
@@ -404,6 +446,9 @@ export default function UploadContractPage() {
           )}
         </div>
       )}
+
+      {/* 全屏预览 */}
+      {fullscreenFile && <FullscreenModal file={fullscreenFile} onClose={() => setFullscreenFile(null)} />}
     </div>
   );
 }
