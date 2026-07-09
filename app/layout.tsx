@@ -8,15 +8,15 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: {
-    default: '易合同 - AI智能合同管理系统',
-    template: '%s | 易合同',
+    default: '多多合同管家 - AI智能合同管理系统',
+    template: '%s | 多多合同管家',
   },
   description:
-    '易合同是一款面向小微企业的AI智能合同管理系统，支持多格式合同上传、AI自动解析、分类归档、到期提醒，助力企业高效管理合同全生命周期。',
+    '多多合同管家是一款面向小微企业的AI智能合同管理系统，支持多格式合同上传、AI自动解析、分类归档、到期提醒，助力企业高效管理合同全生命周期。',
   keywords: ['合同管理', 'AI合同解析', '智能合同', '合同管理系统', '小微企业', '电子合同'],
-  authors: [{ name: '易合同团队' }],
+  authors: [{ name: '多多合同管家团队' }],
   openGraph: {
-    title: '易合同 - AI智能合同管理系统',
+    title: '多多合同管家 - AI智能合同管理系统',
     description: '面向小微企业的合同全生命周期管理平台',
     type: 'website',
     locale: 'zh_CN',
@@ -46,11 +46,11 @@ export default function RootLayout({
                   <div className="md:col-span-2">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-xl font-bold">
-                        <span className="text-primary">易</span>合同
+                        <span className="text-primary">多多</span>合同管家
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground max-w-sm">
-                      易合同 - AI智能合同管理系统，帮助小微企业高效管理合同全生命周期。
+                      多多合同管家 - AI智能合同管理系统，帮助小微企业高效管理合同全生命周期。
                     </p>
                   </div>
                   <div>
@@ -71,7 +71,7 @@ export default function RootLayout({
                   </div>
                 </div>
                 <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
-                  &copy; {new Date().getFullYear()} 易合同. All rights reserved.
+                  &copy; {new Date().getFullYear()} 多多合同管家. All rights reserved.
                 </div>
               </div>
             </footer>

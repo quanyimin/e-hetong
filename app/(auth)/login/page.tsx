@@ -62,11 +62,11 @@ export default function LoginPage() {
         <div className="flex justify-center mb-4">
           <Link href="/" className="flex items-center gap-2">
             <FileText className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold"><span className="text-primary">易</span>合同</span>
+            <span className="text-2xl font-bold"><span className="text-primary">多多</span>合同管家</span>
           </Link>
         </div>
         <CardTitle className="text-2xl">欢迎回来</CardTitle>
-        <CardDescription>登录您的易合同账号</CardDescription>
+        <CardDescription>登录您的多多合同管家账号</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex border rounded-lg p-1 mb-4">

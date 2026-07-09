@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================
-# 易合同 - 数据库初始化脚本
+# 多多合同管家 - 数据库初始化脚本
 # ===========================================
 # 使用方式:
 #   1. 先在 Supabase 后台创建项目
@@ -14,7 +14,7 @@
 #   postgresql://postgres:password@db.xxxxx.supabase.co:5432/postgres
 # ===========================================
 
-echo "===== 易合同 数据库初始化 ====="
+echo "===== 多多合同管家 数据库初始化 ====="
 echo ""
 echo "📌 请先在浏览器打开 Supabase 后台："
 echo "   https://supabase.com/dashboard/project/vaevfrzlnjwacsaafkiu"

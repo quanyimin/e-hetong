@@ -130,7 +130,7 @@ async function sendEmail(p: NotificationPayload): Promise<NotificationResult> {
   // 生产环境接入 Resend
   // const { Resend } = await import('resend');
   // const resend = new Resend(process.env.RESEND_API_KEY);
-  // await resend.emails.send({ from: '易合同 <noreply@e-hetong.com>', to: user.email, subject: p.title, html: buildEmailHtml(p, user.name) });
+  // await resend.emails.send({ from: '多多合同管家 <noreply@e-hetong.com>', to: user.email, subject: p.title, html: buildEmailHtml(p, user.name) });
 
   return { success: false, channel: 'email', error: '请配置 RESEND_API_KEY' };
 }
@@ -201,7 +201,7 @@ async function sendSms(p: NotificationPayload): Promise<NotificationResult> {
   // 阿里云短信示例：
   // const SMSClient = require('@alicloud/sms-sdk');
   // const client = new SMSClient({ accessKeyId: process.env.SMS_ACCESS_KEY, secretAccessKey: process.env.SMS_SECRET_KEY });
-  // await client.sendSMS({ PhoneNumbers: phone, SignName: process.env.SMS_SIGN || '易合同', TemplateCode: process.env.SMS_TEMPLATE_REMINDER, TemplateParam: JSON.stringify({ title: p.title, date: p.remindAt.toLocaleDateString('zh-CN') }) });
+  // await client.sendSMS({ PhoneNumbers: phone, SignName: process.env.SMS_SIGN || '多多合同管家', TemplateCode: process.env.SMS_TEMPLATE_REMINDER, TemplateParam: JSON.stringify({ title: p.title, date: p.remindAt.toLocaleDateString('zh-CN') }) });
 
   return { success: false, channel: 'sms', error: '请配置短信服务商' };
 }
@@ -250,7 +250,7 @@ function buildEmailHtml(p: NotificationPayload, userName: string | null): string
       </div>
     </div>
     <div style="padding:20px 40px;background:#f8f9fa;border-top:1px solid #eee;text-align:center;color:#999;font-size:12px;">
-      此邮件由易合同系统自动发送<br><a href="${appUrl}" style="color:#6366f1;text-decoration:none;">${appUrl}</a>
+      此邮件由多多合同管家系统自动发送<br><a href="${appUrl}" style="color:#6366f1;text-decoration:none;">${appUrl}</a>
     </div>
   </div>
 </body></html>`;

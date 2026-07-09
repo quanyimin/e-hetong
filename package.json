@@ -2,7 +2,7 @@
   "name": "e-hetong",
   "version": "1.0.0",
   "private": true,
-  "description": "易合同 - AI智能合同管理系统",
+  "description": "多多合同管家 - AI智能合同管理系统",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",

@@ -31,7 +31,7 @@ async function main() {
   const startTime = Date.now();
 
   console.log(`\n══════════════════════════════════════════`);
-  console.log(`  易合同 - 到期提醒定时任务`);
+  console.log(`  多多合同管家 - 到期提醒定时任务`);
   console.log(`  执行时间：${new Date().toLocaleString('zh-CN')}`);
   console.log(`  运行模式：${isDryRun ? '🔍 试运行' : '🚀 正式运行'}`);
   console.log(`══════════════════════════════════════════\n`);

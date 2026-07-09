@@ -102,7 +102,7 @@ export default function HomePage() {
               <span className="block text-primary mt-2">更智能、更高效</span>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-              易合同利用 AI 技术，为小微企业提供合同上传、智能解析、分类归档、到期提醒一站式服务，
+              多多合同管家利用 AI 技术，为小微企业提供合同上传、智能解析、分类归档、到期提醒一站式服务，
               让您从繁琐的合同管理工作中解放出来。
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     });
 
     const result = await createUnifiedOrder({
-      description: `易合同 - ${plan.name}`,
+      description: `多多合同管家 - ${plan.name}`,
       outTradeNo: orderNo,
       amount: plan.price,
       tradeType: 'NATIVE',
