@@ -31,10 +31,10 @@ export default function PersonalLayout({ children }: { children: React.ReactNode
               <Upload className="h-6 w-6" />
               <span className="text-xs font-medium">文件上传</span>
             </Link>
-            <button className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
+            <Link href="/dashboard/email" className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
               <Inbox className="h-6 w-6" />
               <span className="text-xs font-medium">邮箱导入</span>
-            </button>
+            </Link>
           </div>
         </div>
       </div>

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Folder, Search, Building2, BadgeCheck, UtensilsCrossed,
-  CheckCircle, Stamp, History, Camera,
+  CheckCircle, Stamp, History, Camera, Mail, Wand2,
 } from 'lucide-react';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { TenantSwitcher } from '@/components/TenantSwitcher';
@@ -24,9 +24,11 @@ interface SidebarItem {
 const ALL_ITEMS: SidebarItem[] = [
   { href: '/dashboard', label: '概览', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/contracts', label: '合同管理', icon: FileText },
+  { href: '/dashboard/contracts/generate', label: 'AI生成合同', icon: Wand2 },
   { href: '/dashboard/folders', label: '合同分类', icon: Folder },
   { href: '/dashboard/upload', label: '上传合同', icon: Upload },
   { href: '/dashboard/camera', label: '拍照上传', icon: Camera, mobileOnly: true },
+  { href: '/dashboard/email', label: '邮箱导入', icon: Mail },
   { href: '/dashboard/assets', label: '资产管理', icon: Building2 },
   { href: '/dashboard/licenses', label: '证照管理', icon: BadgeCheck },
   // 行业插件专区（根据租户启用情况动态显示）

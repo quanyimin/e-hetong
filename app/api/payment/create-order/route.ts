@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ code: 1, message: '用户不存在' }, { status: 404 });
     }
 
-    if (user.memberLevel === 'pro' && user.memberExpireAt && user.memberExpireAt > new Date()) {
+    const existingPaid = await prisma.order.findFirst({
+      where: { userId, paymentStatus: 'paid', expireAt: { gte: new Date() } },
+    });
+    if (existingPaid) {
       return NextResponse.json({ code: 1, message: '您已是年度会员，无需重复购买' }, { status: 400 });
     }
 

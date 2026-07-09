@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { FileText, AlertCircle, Smartphone, Mail, Loader2 } from 'lucide-react';
+import { getTierFromMemberLevel } from '@/lib/adaptive';
 
-const DEMO_ACCOUNTS: Record<string, { password: string; name: string; role: string }> = {
-  'demo@e-hetong.com': { password: 'demo123', name: '张经理', role: 'user' },
-  '13800000002': { password: 'demo123', name: '张经理', role: 'user' },
-  'admin@e-hetong.com': { password: 'admin123', name: '管理员', role: 'admin' },
-  '13800000001': { password: 'admin123', name: '管理员', role: 'admin' },
+const DEMO_ACCOUNTS: Record<string, { password: string; name: string; role: string; memberLevel: string }> = {
+  'demo@e-hetong.com': { password: 'demo123', name: '张经理', role: 'user', memberLevel: 'free' },
+  '13800000002': { password: 'demo123', name: '张经理', role: 'user', memberLevel: 'free' },
+  'admin@e-hetong.com': { password: 'admin123', name: '管理员', role: 'admin', memberLevel: 'pro' },
+  '13800000001': { password: 'admin123', name: '管理员', role: 'admin', memberLevel: 'pro' },
 };
 
 export default function LoginPage() {
@@ -48,8 +49,10 @@ export default function LoginPage() {
         return;
       }
 
-      // 登录成功，直接跳转（强制整页跳转，不用客户端路由）
-      window.location.href = '/dashboard';
+      // 根据会员等级判断跳转目标
+      const tier = getTierFromMemberLevel(user.memberLevel);
+      const redirectPath = tier === 'personal' ? '/home' : '/dashboard';
+      window.location.href = redirectPath;
     } catch {
       setError('登录失败，请稍后重试');
       setIsLoading(false);

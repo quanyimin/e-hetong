@@ -19,14 +19,18 @@ export async function GET(request: NextRequest) {
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
 
-    const [totalUsers, todayNewUsers, totalContracts, expiringContracts, totalOrders, paidUsers] = await Promise.all([
+    const [totalUsers, todayNewUsers, totalContracts, expiringContracts, totalOrders] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { createdAt: { gte: monthStart, lte: monthEnd } } }),
       prisma.contract.count(),
       prisma.contract.count({ where: { endDate: { gte: now, lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) } } }),
       prisma.order.count(),
-      prisma.user.count({ where: { memberLevel: { not: 'free' } } }),
     ]);
+    const paidOrderUsers = await prisma.order.groupBy({
+      by: ['userId'],
+      where: { paymentStatus: 'paid' },
+    });
+    const paidUsers = paidOrderUsers.length;
 
     const paidOrders = await prisma.order.findMany({
       where: { createdAt: { gte: monthStart, lte: monthEnd }, paymentStatus: 'paid' },
@@ -36,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const recentUsers = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' }, take: 5,
-      select: { id: true, name: true, email: true, phone: true, memberLevel: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, createdAt: true },
     });
 
     const recentOrders = await prisma.order.findMany({
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
         parseCompleted, parseFailed, parsePending,
         recentUsers: recentUsers.map(u => ({
           id: u.id, name: u.name || '未知', email: u.email || u.phone || '',
-          level: u.memberLevel, date: u.createdAt.toISOString().split('T')[0],
+          level: '', date: u.createdAt.toISOString().split('T')[0],
         })),
         recentOrders: recentOrders.map(o => ({
           id: o.id, orderNo: o.orderNo, user: o.user.name || '未知',

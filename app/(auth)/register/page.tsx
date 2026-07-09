@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { FileText, Gift, Mail, Smartphone, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { getTierFromMemberLevel } from '@/lib/adaptive';
 
 export default function RegisterPage() {
   const [step, setStep] = React.useState<'form' | 'success'>('form');
@@ -52,7 +53,10 @@ export default function RegisterPage() {
       }
       localStorage.setItem('ehetong_user', JSON.stringify(data.user));
       setStep('success');
-      setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
+      // 新注册用户默认为 free 等级，跳转到个人版首页
+      const tier = getTierFromMemberLevel(data.user?.memberLevel || 'free');
+      const redirectPath = tier === 'personal' ? '/home' : '/dashboard';
+      setTimeout(() => { window.location.href = redirectPath; }, 1500);
     } catch {
       setError('网络错误，请稍后重试');
       setIsLoading(false);

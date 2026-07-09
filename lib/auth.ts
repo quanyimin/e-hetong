@@ -20,7 +20,7 @@ export async function authenticate(account: string, password: string): Promise<{
     await prisma.user.upsert({
       where: { id: user.id },
       update: {},
-      create: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, memberLevel: user.memberLevel },
+      create: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role },
     });
   } catch { /* 忽略 */ }
 
@@ -33,7 +33,7 @@ export async function register(params: { name: string; email?: string; phone?: s
     if (params.phone) { const p = await prisma.user.findUnique({ where: { phone: params.phone } }); if (p) return { success: false, error: '该手机号已被注册' }; }
 
     const user = await prisma.user.create({
-      data: { name: params.name, email: params.email || null, phone: params.phone || null, memberLevel: 'free', role: 'user' },
+      data: { name: params.name, email: params.email || null, phone: params.phone || null, role: 'user' },
     });
 
     const key = params.email || params.phone || '';
