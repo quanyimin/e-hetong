@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// 易合同 v6.0 — 完整数据模型（三层用户 + 行业插件 + 企业版）
+// 设计原则：核心主表固定，行业扩展字段 JSON 化
+// ============================================================
+
+// ===== 用户与认证 =====
 model User {
   id              String    @id @default(cuid())
   email           String?   @unique
@@ -14,12 +20,30 @@ model User {
   wechatOpenId    String?   @unique @map("wechat_openid")
   name            String?
   avatarUrl       String?   @map("avatar_url")
+  role            String    @default("user")      // user | admin
   memberLevel     String    @default("free") @map("member_level")
   memberExpireAt  DateTime? @map("member_expire_at")
-  role            String    @default("user")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  // 个人空间（自动创建）
+  personalSpace   PersonalSpace? @relation("UserPersonalSpace")
+
+  // 多主体关系（一个用户可加入多个主体）
+  tenantRoles     UserTenantRole[]
+
+  // 合同与业务
+  contracts       Contract[]
+  reminders       Reminder[]
+  folders         ContractFolder[]
+  partners        Partner[]
+  assets          Asset[]
+  licenses        License[]
+
+  // 账单与订阅
+  orders          Order[]
+
+  // 分销（可选）
   inviteCode        String?   @unique @map("invite_code")
   invitedBy         String?   @map("invited_by")
   contractBonus     Int       @default(0) @map("contract_bonus")
@@ -28,45 +52,69 @@ model User {
   distributorLevel  String    @default("none") @map("distributor_level")
   distributorSince  DateTime? @map("distributor_since")
   distributorExpire DateTime? @map("distributor_expire")
-  vipMonths         Int       @default(0) @map("vip_months")    // 奖励VIP月数
-
-  contracts       Contract[]
-  orders          Order[]
-  reminders       Reminder[]
-  invitees        User[]                @relation("InviteRelation")
-  inviter         User?                 @relation("InviteRelation", fields: [invitedBy], references: [id])
-  customers       DistributorCustomer[] @relation("OwnerDistributor")
-  distributorOf   DistributorCustomer[] @relation("CustomerDistributor")
-  commissions     Commission[]          @relation("CommissionDistributor")
-  customerCommissions Commission[]      @relation("CommissionCustomer")
-  withdrawals     Withdrawal[]
-  folders         ContractFolder[]
-  tenantRoles     UserTenantRole[]
-  partners        Partner[]
-  personalSpace   PersonalSpace?        @relation("UserPersonalSpace")
+  vipMonths         Int       @default(0) @map("vip_months")
+  invitees          User[]    @relation("InviteRelation")
+  inviter           User?     @relation("InviteRelation", fields: [invitedBy], references: [id])
+  customers         DistributorCustomer[] @relation("OwnerDistributor")
+  distributorOf     DistributorCustomer[] @relation("CustomerDistributor")
+  commissions       Commission[]          @relation("CommissionDistributor")
+  customerCommissions Commission[]        @relation("CommissionCustomer")
+  withdrawals       Withdrawal[]
 
   @@map("users")
 }
 
-// ===== 多租户：企业/个人主体 =====
+// ===== 个人空间（用户注册自动创建，永远免费） =====
+model PersonalSpace {
+  id              String   @id @default(cuid())
+  userId          String   @unique @map("user_id")
+  displayName     String?  @map("display_name")
+  defaultTenantId String?  @map("default_tenant_id")
+  quickTemplates  String?  @map("quick_templates")   // JSON: 快捷模板
+  customKeywords  String?  @map("custom_keywords")   // JSON: 自定义关键词
+  recentContracts String?  @map("recent_contracts")  // JSON: 最近浏览
+  pinnedContracts String?  @map("pinned_contracts")  // JSON: 置顶合同
+  preferences     String?  // JSON: UI偏好、布局、主题
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation("UserPersonalSpace", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("personal_spaces")
+}
+
+// ===== 多主体 =====
 model Tenant {
   id        String   @id @default(cuid())
   name      String
-  type      String   @default("PERSONAL") // PERSONAL | INDIVIDUAL | ENTERPRISE
+  type      String   @default("PERSONAL")  // PERSONAL | INDIVIDUAL | ENTERPRISE | BRANCH
+  ownerId   String   @map("owner_id")
+  // 行业/场景配置
   sceneType String   @default("GENERAL")
   industry  String?
   industryVersionId String? @map("industry_version_id")
-  planId    String?
-  ownerId   String   @map("owner_id")
-  creditCode String? @map("credit_code")
+  // 订阅
+  planId    String?  @map("plan_id")
+  memberLevel String @default("free") @map("member_level")
+  memberExpireAt DateTime? @map("member_expire_at")
+  maxContracts Int  @default(50) @map("max_contracts")
+  maxMembers  Int   @default(1) @map("max_members")
+  // 企业信息
+  creditCode  String? @map("credit_code")
   contactName String? @map("contact_name")
   contactPhone String? @map("contact_phone")
+  address     String?
+  // 时间
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   roles         UserTenantRole[]
   enabledScenes TenantEnabledScene[]
   industryVersion IndustryVersion? @relation(fields: [industryVersionId], references: [id])
+  departments   Department[]
+  approvals     Approval[]
+  auditLogs     AuditLog[]
+  contracts     Contract[]
 
   @@map("tenants")
 }
@@ -85,19 +133,7 @@ model UserTenantRole {
   @@map("user_tenant_roles")
 }
 
-model TenantEnabledScene {
-  id        String   @id @default(cuid())
-  tenantId  String   @map("tenant_id")
-  sceneId   String   @map("scene_id")
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, sceneId])
-  @@map("tenant_enabled_scenes")
-}
-
+// ===== 行业版本 =====
 model IndustryVersion {
   id          String   @id @default(cuid())
   code        String   @unique
@@ -105,7 +141,7 @@ model IndustryVersion {
   icon        String?  @default("LayoutDashboard")
   description String?
   sortOrder   Int      @default(0) @map("sort_order")
-  config      String?  // JSON 配置
+  config      String?  // JSON 行业配置
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -130,6 +166,7 @@ model IndustryVersionScene {
   @@map("industry_version_scenes")
 }
 
+// ===== 行业场景（10大行业插件） =====
 model IndustryScene {
   id          String   @id @default(cuid())
   code        String   @unique
@@ -145,29 +182,12 @@ model IndustryScene {
 
   versions IndustryVersionScene[]
   plugins  PluginDefinition[]
+  templates ContractTemplate[]
 
   @@map("industry_scenes")
 }
 
-// ===== 个人空间：用户个性化配置 =====
-model PersonalSpace {
-  id              String   @id @default(cuid())
-  userId          String   @unique @map("user_id")
-  defaultTenantId String?  @map("default_tenant_id")
-  quickTemplates  String?  @map("quick_templates")  // JSON：个人快捷模板列表
-  customKeywords  String?  @map("custom_keywords")  // JSON：自定义关键词识别规则
-  recentContracts String?  @map("recent_contracts") // JSON：最近浏览合同ID列表
-  pinnedContracts String?  @map("pinned_contracts") // JSON：置顶合同ID列表
-  preferences     String?  // JSON：UI偏好、布局、默认视图等
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  user User @relation("UserPersonalSpace", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("personal_spaces")
-}
-
-// ===== 插件定义：行业/企业级功能插件 =====
+// ===== 插件定义 =====
 model PluginDefinition {
   id           String   @id @default(cuid())
   code         String   @unique
@@ -177,7 +197,7 @@ model PluginDefinition {
   version      String   @default("1.0.0")
   type         String   @default("INDUSTRY")  // SYSTEM | INDUSTRY | CUSTOM
   sceneId      String?  @map("scene_id")
-  configSchema String?  @map("config_schema") // JSON：前端动态表单配置
+  configSchema String?  @map("config_schema") // JSON: 前端动态表单
   entryPoint   String?  @map("entry_point")   // 前端模块路径
   apiEndpoint  String?  @map("api_endpoint")  // 后端API前缀
   status       String   @default("active")
@@ -191,14 +211,28 @@ model PluginDefinition {
   @@map("plugin_definitions")
 }
 
+model TenantEnabledScene {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  sceneId   String   @map("scene_id")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, sceneId])
+  @@map("tenant_enabled_scenes")
+}
+
 // ===== 合同文件夹 =====
 model ContractFolder {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
+  tenantId  String?  @map("tenant_id")
   name      String
   parentId  String?  @map("parent_id")
   sortOrder Int      @default(0) @map("sort_order")
-  color     String?  // 颜色标识
+  color     String?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -211,6 +245,331 @@ model ContractFolder {
   @@map("contract_folders")
 }
 
+// ===== 合作方档案 =====
+model Partner {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tenantId  String?  @map("tenant_id")
+  name      String
+  phone     String?
+  company   String?
+  remark    String?
+  type      String?  // SUPPLIER | CUSTOMER | TENANT | EMPLOYEE | OTHER
+  tags      String?  // JSON: ["优质","长期合作"]
+  isBlacklisted Boolean @default(false) @map("is_blacklisted")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User      @relation(fields: [userId], references: [id])
+  contracts Contract[]
+  bills     Bill[]
+
+  @@index([userId])
+  @@map("partners")
+}
+
+// ===== 合同（核心业务表） =====
+model Contract {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  tenantId    String?  @map("tenant_id")
+  name        String
+  type        String?               // sale | lease | labor | service | loan | nda | other
+  category    String?               // 行业分类（自动归类）
+
+  // 合同双方
+  partyA      String?  @map("party_a")
+  partyB      String?  @map("party_b")
+  partnerId   String?  @map("partner_id")
+
+  // 金额与期限
+  amount      Float?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+
+  // 方向与状态
+  direction   String?               // INCOME(收款) | EXPENSE(支出)
+  status      String   @default("DRAFT") // DRAFT | SIGNING | ACTIVE | CLOSED | TERMINATED | ARCHIVED
+  financialType String? @map("financial_type")
+
+  // 文件与解析
+  fileUrl     String?  @map("file_url")
+  fileType    String?  @map("file_type")
+  ocrText     String?  @map("ocr_text")
+  parsedData  String?  @map("parsed_data")    // JSON: AI解析结果
+  parseStatus String   @default("pending") @map("parse_status") // pending | parsing | done | failed
+  riskAlerts  String?  @map("risk_alerts")    // JSON: AI风控告警
+  keyClauses  String?  @map("key_clauses")    // JSON: 关键条款
+  summary     String?
+  keywords    String?                         // JSON: 关键词数组
+
+  // 归类
+  tags        String?                         // JSON: 标签数组
+  folderId    String?  @map("folder_id")
+  sceneConfig String?  @map("scene_config")   // JSON: 行业场景扩展配置
+  source      String?  @default("UPLOAD")     // UPLOAD | OCR | IMPORT | SYNC | GENERATE
+
+  // 搜索增强
+  searchText  String?  @map("search_text")    // 预拼接全文搜索
+
+  // 归档
+  archived    Boolean  @default(false)
+  remark      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  partner   Partner?       @relation(fields: [partnerId], references: [id])
+  folder    ContractFolder? @relation("FolderContracts", fields: [folderId], references: [id])
+  reminders Reminder[]
+  bills     Bill[]
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([folderId])
+  @@index([parseStatus])
+  @@index([status])
+  @@index([createdAt])
+  @@index([endDate])
+  @@index([direction])
+  @@index([partnerId])
+  @@index([searchText])
+  @@map("contracts")
+}
+
+// ===== 账单/台账（自动生成，闭环核心） =====
+model Bill {
+  id         String   @id @default(cuid())
+  contractId String   @map("contract_id")
+  tenantId   String?  @map("tenant_id")
+  partnerId  String?  @map("partner_id")
+  title      String?
+  amount     Float    @default(0)
+  paidAmount Float    @default(0) @map("paid_amount")
+  lateFee    Float?   @map("late_fee")     // 逾期罚息
+  type       String   // INCOME | EXPENSE
+  category   String?                        // rent | purchase | salary | service | other
+  status     String   @default("PENDING")   // PENDING | PARTIAL | PAID | OVERDUE
+  dueDate    DateTime? @map("due_date")
+  paidAt     DateTime? @map("paid_at")
+  remark     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  partner  Partner? @relation(fields: [partnerId], references: [id])
+
+  @@index([contractId])
+  @@index([status])
+  @@index([type])
+  @@index([dueDate])
+  @@map("bills")
+}
+
+// ===== 提醒 =====
+model Reminder {
+  id         String    @id @default(cuid())
+  contractId String?   @map("contract_id")
+  billId     String?   @map("bill_id")
+  userId     String    @map("user_id")
+  tenantId   String?   @map("tenant_id")
+  remindAt   DateTime  @map("remind_at")
+  remindType String    @default("CONTRACT_EXPIRE") @map("remind_type")
+  title      String?
+  message    String?
+  sendStatus String    @default("pending") @map("send_status") // pending | sent | failed
+  sentAt     DateTime? @map("sent_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  contract Contract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([remindAt])
+  @@index([sendStatus])
+  @@index([tenantId])
+  @@map("reminders")
+}
+
+// ===== 资产（房源/设备/土地） =====
+model Asset {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  tenantId    String?  @map("tenant_id")
+  name        String
+  type        String   // HOUSE | EQUIPMENT | LAND | VEHICLE | OTHER
+  identifier  String?  // 编号/车牌号/设备序列号
+  description String?
+  address     String?
+  area        Float?    // 面积(㎡)
+  value       Float?    // 资产价值
+  status      String   @default("ACTIVE") // ACTIVE | MAINTENANCE | INACTIVE
+  nextMaintenanceAt DateTime? @map("next_maintenance_at")
+  tags        String?  // JSON
+  metadata    String?  // JSON: 行业扩展字段
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@map("assets")
+}
+
+// ===== 证照管理 =====
+model License {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  tenantId       String?  @map("tenant_id")
+  name           String
+  licenseNumber  String?  @map("license_number")
+  issuingAuthority String? @map("issuing_authority")
+  type           String   // BUSINESS | FOOD_SAFETY | FIRE | HEALTH | PERMIT | OTHER
+  issueDate      DateTime? @map("issue_date")
+  expireDate     DateTime? @map("expire_date")
+  notifyDays     Int      @default(30) @map("notify_days")  // 提前提醒天数
+  status         String   @default("ACTIVE") // ACTIVE | EXPIRING | EXPIRED
+  attachmentUrl  String?  @map("attachment_url")
+  tags           String?  // JSON
+  metadata       String?  // JSON: 行业扩展
+  files          String?  // JSON: 证照图片文件列表
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([expireDate])
+  @@map("licenses")
+}
+
+// ===== 合同模板（AI 生成 + 行业预设） =====
+model ContractTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  industry    String?           // 行业code，空=通用
+  sceneId     String?  @map("scene_id")
+  type        String            // SALE | LEASE | SERVICE | PURCHASE | LABOR | NDA | OTHER
+  content     String            // 模板内容（支持 {{变量}} 占位符）
+  fields      String?           // JSON: 模板变量定义
+  isOfficial  Boolean  @default(false) @map("is_official")  // 官方预设模板
+  version     String   @default("1.0.0")
+  usageCount  Int      @default(0) @map("usage_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  scene IndustryScene? @relation(fields: [sceneId], references: [id])
+
+  @@index([industry])
+  @@index([type])
+  @@map("contract_templates")
+}
+
+// ===== 企业组织架构（大企业版） =====
+model Department {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  parentId  String?  @map("parent_id")
+  managerId String?  @map("manager_id")   // 部门负责人 userId
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children Department[] @relation("DepartmentHierarchy")
+
+  @@unique([tenantId, name])
+  @@map("departments")
+}
+
+// ===== 审批流程 =====
+model Approval {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  contractId  String?  @map("contract_id")
+  title       String
+  type        String   // CONTRACT | SEAL | PAYMENT | OTHER
+  status      String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  submittedBy String   @map("submitted_by")  // userId
+  approvedBy  String?  @map("approved_by")   // userId
+  comment     String?
+  submittedAt DateTime @default(now()) @map("submitted_at")
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("approvals")
+}
+
+// ===== 审计日志 =====
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @map("user_id")
+  action    String   // CREATE | UPDATE | DELETE | APPROVE | REJECT | EXPORT
+  entity    String   // CONTRACT | BILL | PARTNER | TENANT | ASSET | LICENSE
+  entityId  String?  @map("entity_id")
+  detail    String?  // JSON: 操作详情
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ===== 套餐 =====
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  level       Int      @default(0)
+  price       Float    @default(0)
+  description String?
+  features    String?  // JSON: 功能清单
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("subscription_plans")
+}
+
+// ===== 订单 =====
+model Order {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  orderNo       String    @unique @map("order_no")
+  planType      String    @map("plan_type")
+  amount        Float
+  currency      String    @default("CNY")
+  paymentMethod String?   @map("payment_method")
+  paymentStatus String    @default("pending") @map("payment_status")
+  paidAt        DateTime? @map("paid_at")
+  expireAt      DateTime? @map("expire_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commissions Commission[]
+
+  @@index([userId])
+  @@index([paymentStatus])
+  @@map("orders")
+}
+
+// ===== 分销体系（可选模块） =====
 model DistributorCustomer {
   id             String   @id @default(cuid())
   distributorId  String   @map("distributor_id")
@@ -243,9 +602,6 @@ model Commission {
   distributor User  @relation("CommissionDistributor", fields: [distributorId], references: [id])
   customer    User  @relation("CommissionCustomer", fields: [customerId], references: [id])
 
-  @@index([distributorId])
-  @@index([orderId])
-  @@index([status])
   @@map("commissions")
 }
 
@@ -265,174 +621,5 @@ model Withdrawal {
 
   user User @relation(fields: [userId], references: [id])
 
-  @@index([userId])
-  @@index([status])
   @@map("withdrawals")
-}
-
-model Contract {
-  id          String   @id @default(cuid())
-  userId      String   @map("user_id")
-  name        String
-  type        String?
-  partyA      String?  @map("party_a")
-  partyB      String?  @map("party_b")
-  amount      Float?
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
-  fileUrl     String?  @map("file_url")
-  fileType    String?  @map("file_type")
-  ocrText     String?  @map("ocr_text")
-  parsedData  String?  @map("parsed_data")
-  parseStatus String   @default("pending") @map("parse_status")
-  tags        String?
-  keywords    String?  // JSON数组 ["采购","年度"]
-  summary     String?
-  riskAlerts  String?  // JSON数组
-  keyClauses  String?  // JSON数组
-  remark      String?
-  folderId    String?  @map("folder_id")
-  archived    Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reminders Reminder[]
-  folder   ContractFolder? @relation("FolderContracts", fields: [folderId], references: [id])
-
-  // === Phase 2 补充字段（临时兼容 Phase 1 编译） ===
-  tenantId      String?  @map("tenant_id")
-  status        String   @default("ACTIVE") // ACTIVE | EXPIRED | TERMINATED
-  financialType String?  @map("financial_type") // INCOME | EXPENSE
-  category      String?
-  partnerId     String?  @map("partner_id")
-  sceneConfig   String?  @map("scene_config")  // JSON 行业场景配置
-  direction     String?  // IN(收款) | OUT(支出)
-  source        String?  // UPLOAD | OCR | IMPORT | SYNC
-
-  partner  Partner? @relation(fields: [partnerId], references: [id])
-  bills    Bill[]
-
-  // === Phase 4：搜索增强 ===
-  searchText String? @map("search_text") // 预拼接的可搜索文本（name+partyA+partyB+tags）
-
-  @@index([userId])
-  @@index([folderId])
-  @@index([parseStatus])
-  @@index([createdAt])
-  @@index([endDate])
-  @@index([tenantId])
-  @@index([status])
-  @@index([searchText])
-  @@map("contracts")
-}
-
-model Reminder {
-  id         String    @id @default(cuid())
-  contractId String    @map("contract_id")
-  userId     String    @map("user_id")
-  remindAt   DateTime  @map("remind_at")
-  remindType String    @default("expire") @map("remind_type")
-  title      String?
-  message    String?
-  sendStatus String    @default("pending") @map("send_status")
-  sentAt     DateTime? @map("sent_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-
-  tenantId String? @map("tenant_id")
-
-  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([remindAt])
-  @@index([sendStatus])
-  @@index([tenantId])
-  @@map("reminders")
-}
-
-// ===== 套餐定义（Phase 2 正式启用） =====
-model SubscriptionPlan {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  name        String
-  level       Int      @default(0)
-  price       Float    @default(0)
-  description String?
-  features    String?  // JSON
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("subscription_plans")
-}
-
-// ===== 合作伙伴（Phase 2 正式启用） =====
-model Partner {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  tenantId  String?  @map("tenant_id")
-  name      String
-  phone     String?
-  company   String?
-  remark    String?
-  type      String?  // supplier | customer | tenant | other
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user      User      @relation(fields: [userId], references: [id])
-  contracts Contract[]
-  bills     Bill[]
-
-  @@index([userId])
-  @@map("partners")
-}
-
-// ===== 账单/流水（Phase 2 正式启用） =====
-model Bill {
-  id         String   @id @default(cuid())
-  contractId String   @map("contract_id")
-  tenantId   String?  @map("tenant_id")
-  partnerId  String?  @map("partner_id")
-  title      String?
-  amount     Float    @default(0)
-  paidAmount Float    @default(0) @map("paid_amount")
-  lateFee    Float?   @map("late_fee")
-  type       String   // INCOME | EXPENSE
-  category   String?
-  status     String   @default("pending")
-  dueDate    DateTime? @map("due_date")
-  paidAt     DateTime? @map("paid_at")
-  remark     String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  partner  Partner? @relation(fields: [partnerId], references: [id])
-
-  @@index([contractId])
-  @@map("bills")
-}
-
-model Order {
-  id            String    @id @default(cuid())
-  userId        String    @map("user_id")
-  orderNo       String    @unique @map("order_no")
-  planType      String    @map("plan_type")
-  amount        Float
-  currency      String    @default("CNY")
-  paymentMethod String?   @map("payment_method")
-  paymentStatus String    @default("pending") @map("payment_status")
-  paidAt        DateTime? @map("paid_at")
-  expireAt      DateTime? @map("expire_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  commissions Commission[]
-
-  @@index([userId])
-  @@index([orderNo])
-  @@index([paymentStatus])
-  @@map("orders")
 }

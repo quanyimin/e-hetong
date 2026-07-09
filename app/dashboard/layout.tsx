@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Folder, Search,
+  LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Folder, Search, Building2, BadgeCheck,
 } from 'lucide-react';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { TenantSwitcher } from '@/components/TenantSwitcher';
@@ -23,6 +23,8 @@ const ALL_ITEMS: SidebarItem[] = [
   { href: '/dashboard/contracts', label: '合同管理', icon: FileText },
   { href: '/dashboard/folders', label: '合同分类', icon: Folder },
   { href: '/dashboard/upload', label: '上传合同', icon: Upload },
+  { href: '/dashboard/assets', label: '资产管理', icon: Building2 },
+  { href: '/dashboard/licenses', label: '证照管理', icon: BadgeCheck },
   { href: '/dashboard/reminders', label: '提醒管理', icon: Bell },
   { href: '/dashboard/distribution', label: '分销中心', icon: Gift, distributorOnly: true },
   { href: '/dashboard/settings', label: '设置', icon: Settings },
