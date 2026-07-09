@@ -1,140 +1,203 @@
 'use client';
 
-import * as React from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  FileText, AlertTriangle, Bell, TrendingUp, ArrowUpRight, Clock, Plus, Sparkles, Crown
-} from 'lucide-react';
-import { formatDate, formatAmount } from '@/lib/utils';
+import { FileText, TrendingUp, AlertTriangle, ArrowRight, Building2, UtensilsCrossed, Users, DollarSign } from 'lucide-react';
 
-const STATS_DATA = {
-  totalContracts: 128,
-  expiringCount: 8,
-  thisMonthUploads: 23,
-  pendingReminders: 5,
-  contractUsage: 8,
-  contractLimit: 20,
-  memberLevel: 'free' as 'free' | 'pro',
+const SCENE_CONFIG: Record<string, { name: string; icon: any; color: string; href: string; quickActions: { label: string; href: string }[] }> = {
+  LANDLORD: {
+    name: '房东物业',
+    icon: Building2,
+    color: 'text-blue-600 bg-blue-50',
+    href: '/dashboard/landlord',
+    quickActions: [
+      { label: '水电读数', href: '/dashboard/landlord/meters' },
+      { label: '押金管理', href: '/dashboard/landlord/deposit' },
+      { label: '设备管理', href: '/dashboard/landlord/devices' },
+    ],
+  },
+  RESTAURANT: {
+    name: '餐饮门店',
+    icon: UtensilsCrossed,
+    color: 'text-orange-600 bg-orange-50',
+    href: '/dashboard/restaurant',
+    quickActions: [
+      { label: '证照管理', href: '/dashboard/restaurant/licenses' },
+      { label: '月度计划', href: '/dashboard/restaurant/plan' },
+      { label: '供应商管理', href: '/dashboard/partners' },
+    ],
+  },
 };
 
-const RECENT_CONTRACTS = [
-  { id: 'c1', name: '2024年度采购合同', partyA: '上海科技有限公司', amount: 580000, status: 'active' as const, endDate: '2024-12-31' },
-  { id: 'c2', name: '办公室租赁合同', partyA: '北京写字楼管理公司', amount: 240000, status: 'expiring' as const, endDate: '2024-08-15' },
-  { id: 'c3', name: '软件开发服务协议', partyA: '深圳数码科技有限公司', amount: 150000, status: 'active' as const, endDate: '2025-03-20' },
-  { id: 'c4', name: '员工劳动合同 - 张三', partyA: '张三', amount: 0, status: 'active' as const, endDate: '2025-06-01' },
-  { id: 'c5', name: '品牌授权协议', partyA: '广州品牌管理有限公司', amount: 300000, status: 'expired' as const, endDate: '2024-01-01' },
-];
-
-const UPCOMING_REMINDERS = [
-  { id: '1', title: '办公室租赁合同即将到期', contractId: 'c2', date: '2024-08-15', type: 'expire' as const },
-  { id: '2', title: '2024年度采购合同半年复核', contractId: 'c1', date: '2024-07-01', type: 'review' as const },
-  { id: '3', title: '品牌授权协议续约提醒', contractId: 'c5', date: '2024-06-01', type: 'custom' as const },
-];
-
 export default function DashboardPage() {
-  const { totalContracts, expiringCount, thisMonthUploads, pendingReminders, contractUsage, contractLimit, memberLevel } = STATS_DATA;
-  const usagePercent = Math.min((contractUsage / contractLimit) * 100, 100);
-  const isNearLimit = contractUsage >= contractLimit * 0.8;
+  const [stats, setStats] = useState<any>({});
+  const [recentContracts, setRecentContracts] = useState<any[]>([]);
+  const [billsDue, setBillsDue] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/dashboard/stats').then(r => r.json()),
+      fetch('/api/contracts?limit=5').then(r => r.json()),
+      fetch('/api/bills?status=PENDING').then(r => r.json()),
+    ]).then(([statsData, contractsData, billsData]) => {
+      setStats(statsData.stats || statsData || {});
+      setRecentContracts(contractsData.data || contractsData.contracts || []);
+      setBillsDue(billsData.bills || []);
+    }).catch(console.error).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64 text-muted-foreground">加载中...</div>;
+  }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">概览</h1>
-        <p className="text-muted-foreground mt-1">欢迎回来，以下是您的合同数据概览</p>
+    <div className="space-y-6">
+      {/* 概览统计 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">合同总数</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalContracts || 0}</div>
+            <p className="text-xs text-muted-foreground">总金额 ¥{(stats.totalAmount || 0).toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">待收账款</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">¥{(stats.pendingIncome || 0).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{stats.pendingIncomeCount || 0}笔待收</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">待付款项</CardTitle>
+            <DollarSign className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">¥{(stats.pendingExpense || 0).toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{stats.pendingExpenseCount || 0}笔待付</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">即将到期</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.expiringCount || 0}</div>
+            <p className="text-xs text-muted-foreground">30天内到期</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card className={`border-2 ${memberLevel === 'pro' ? 'border-amber-200 bg-amber-50/50' : 'border-muted'}`}>
-        <CardContent className="p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`h-10 w-10 rounded-full ${memberLevel === 'pro' ? 'bg-amber-100' : 'bg-muted'} flex items-center justify-center`}>
-              <Crown className={`h-5 w-5 ${memberLevel === 'pro' ? 'text-amber-500' : 'text-muted-foreground'}`} />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{memberLevel === 'pro' ? '年度会员' : '免费版'}</p>
-              {memberLevel === 'free' && (
-                <div className="flex items-center gap-2">
-                  <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${isNearLimit ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${usagePercent}%` }} />
+      {/* 行业插件看板 */}
+      <div>
+        <h2 className="text-lg font-semibold mb-4">行业插件</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(SCENE_CONFIG).map(([code, config]) => {
+            const Icon = config.icon;
+            return (
+              <Card key={code} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3">
+                    <div className={`p-2.5 rounded-lg ${config.color}`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{config.name}</h3>
+                        <Badge variant="secondary" className="text-xs">已安装</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {config.quickActions.map(action => (
+                          <Link key={action.href} href={action.href}>
+                            <Button variant="outline" size="sm" className="text-xs">
+                              {action.label}
+                            </Button>
+                          </Link>
+                        ))}
+                        <Link href={config.href}>
+                          <Button variant="ghost" size="sm" className="text-xs">
+                            进入 <ArrowRight className="h-3 w-3 ml-1" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">{contractUsage}/{contractLimit}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          {memberLevel === 'free' && (
-            <Link href="/dashboard/settings"><Button size="sm" className="gap-1"><Sparkles className="h-3 w-3" />升级</Button></Link>
-          )}
-        </CardContent>
-      </Card>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { title: '合同总数', value: totalContracts, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-100' },
-          { title: '即将到期', value: expiringCount, icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-100' },
-          { title: '本月上传', value: thisMonthUploads, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-100' },
-          { title: '待处理提醒', value: pendingReminders, icon: Bell, color: 'text-purple-600', bg: 'bg-purple-100' },
-        ].map((stat) => (
-          <Card key={stat.title} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-muted-foreground">{stat.title}</p><p className="text-3xl font-bold mt-1">{stat.value}</p></div>
-                <div className={`h-12 w-12 rounded-full ${stat.bg} flex items-center justify-center`}><stat.icon className={`h-6 w-6 ${stat.color}`} /></div>
+      {/* 待办账单 */}
+      {billsDue.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold">待办账款</h2>
+            <Link href="/dashboard/ledger" className="text-sm text-primary flex items-center gap-1">
+              台账详情 <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {billsDue.slice(0, 5).map((bill: any) => (
+                  <div key={bill.id} className="flex items-center justify-between p-4">
+                    <div>
+                      <p className="text-sm font-medium">{bill.title || bill.contract?.name || '账单'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {bill.dueDate ? `到期: ${new Date(bill.dueDate).toLocaleDateString()}` : ''}
+                        {' · '}{bill.type === 'INCOME' ? '应收' : '应付'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">¥{bill.amount.toLocaleString()}</p>
+                      <Badge variant={bill.status === 'OVERDUE' ? 'destructive' : 'outline'} className="text-xs">
+                        {bill.status === 'OVERDUE' ? '逾期' : '待处理'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div><CardTitle>最近合同</CardTitle><CardDescription>点击可查看详情</CardDescription></div>
-            <Link href="/dashboard/contracts"><Button variant="ghost" size="sm">查看全部</Button></Link>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              {RECENT_CONTRACTS.map((contract) => (
-                <Link key={contract.id} href={`/dashboard/contracts/${contract.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{contract.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {contract.partyA}{contract.amount > 0 && ` · ${formatAmount(contract.amount)}`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 ml-4">
-                    <Badge variant={contract.status === 'expired' ? 'destructive' : contract.status === 'expiring' ? 'warning' : 'success'} className="text-xs">
-                      {contract.status === 'active' ? '进行中' : contract.status === 'expiring' ? '即将到期' : '已过期'}
-                    </Badge>
-                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+      {/* 最近合同 */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">最近合同</h2>
+          <Link href="/dashboard/contracts" className="text-sm text-primary flex items-center gap-1">
+            查看全部 <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div><CardTitle>待办提醒</CardTitle><CardDescription>点击跳转到合同详情</CardDescription></div>
-            <Link href="/dashboard/reminders"><Button variant="ghost" size="sm">全部</Button></Link>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {UPCOMING_REMINDERS.map((reminder) => (
-                <Link key={reminder.id} href={`/dashboard/contracts/${reminder.contractId}`}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
-                    reminder.type === 'expire' ? 'bg-amber-500' : reminder.type === 'review' ? 'bg-blue-500' : 'bg-purple-500'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{reminder.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <Clock className="h-3 w-3" />{reminder.date}
-                    </p>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {recentContracts.slice(0, 5).map((c: any) => (
+                <Link key={c.id} href={`/dashboard/contracts/${c.id}`}>
+                  <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{c.partyA || c.partyB || ''}</p>
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      <p className="text-sm font-medium">{c.amount ? `¥${c.amount.toLocaleString()}` : '-'}</p>
+                      <Badge variant="outline" className="text-xs">{c.status || ''}</Badge>
+                    </div>
                   </div>
                 </Link>
               ))}
