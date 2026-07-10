@@ -1,263 +1,424 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@/components/ui/modal';
+import { Separator } from '@/components/ui/separator';
 import {
-  User, Mail, Crown, Bell, Shield, ArrowRight, CheckCircle2, AlertTriangle, Sparkles, Loader2, Check
+  User, Mail, Phone, Crown, Bell, Shield, Key, Smartphone,
+  CheckCircle2, AlertTriangle, Sparkles, Loader2, Check,
+  Building2, Home, Store, Plus, RefreshCw, LogOut
 } from 'lucide-react';
-import { formatDate, formatAmount } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
-const PLANS = [
-  {
-    id: 'free',
-    name: '免费版',
-    price: '¥0',
-    period: '永久',
-    contractLimit: '20份',
-    features: ['基础合同管理', '手动分类', '到期站内信提醒'],
-    popular: false,
-  },
-  {
-    id: 'pro_yearly',
-    name: '年度会员',
-    price: '¥99',
-    period: '/年',
-    contractLimit: '无限',
-    features: ['无限合同', 'AI智能解析', '多格式上传', '合同导出', '到期邮件提醒', '数据看板', '高优客服'],
-    popular: true,
-    badge: '推荐',
-    savings: '每天不到 ¥0.27',
-  },
-];
+const TENANT_LABELS: Record<string, string> = {
+  PERSONAL: '个人账号',
+  INDIVIDUAL: '个体工商户',
+  ENTERPRISE: '企业账号',
+};
+
+const TENANT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  PERSONAL: Home,
+  INDIVIDUAL: Store,
+  ENTERPRISE: Building2,
+};
 
 export default function SettingsPage() {
+  const { user, tenant, tenantList, switchTenant, updateUser, logout } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  const [memberLevel, setMemberLevel] = React.useState<'free' | 'pro'>('free');
-  const [memberExpireAt, setMemberExpireAt] = React.useState<Date | null>(null);
-  const [contractCount, setContractCount] = React.useState(8);
-  const contractLimit = 20;
+  const [activeTab, setActiveTab] = React.useState('profile');
 
-  const [showUpgradeModal, setShowUpgradeModal] = React.useState(false);
-  const [selectedPlan, setSelectedPlan] = React.useState('pro_yearly');
-  const [payLoading, setPayLoading] = React.useState(false);
-  const [paySuccess, setPaySuccess] = React.useState(false);
+  const [name, setName] = React.useState(user?.name || '');
+  const [email, setEmail] = React.useState(user?.email || '');
+  const [phone, setPhone] = React.useState(user?.phone || '');
+  const [saving, setSaving] = React.useState(false);
+  const [saveSuccess, setSaveSuccess] = React.useState(false);
+  const [showNewTenantDialog, setShowNewTenantDialog] = React.useState(false);
+  const [newTenantType, setNewTenantType] = React.useState<'PERSONAL' | 'ENTERPRISE'>('PERSONAL');
+  const [newTenantName, setNewTenantName] = React.useState('');
+  const [creatingTenant, setCreatingTenant] = React.useState(false);
 
-  // 监听升级成功参数
+  // 同步用户数据
   React.useEffect(() => {
-    if (searchParams.get('upgrade') === 'success') {
-      setMemberLevel('pro');
-      setMemberExpireAt(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
+    setName(user?.name || '');
+    setEmail(user?.email || '');
+    setPhone(user?.phone || '');
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, name, email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateUser({ name, email });
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch {
+      // 网络错误静默处理
     }
-  }, [searchParams]);
+    setSaving(false);
+  };
 
-  const isExpired = memberExpireAt && new Date() > memberExpireAt;
-  const usagePercent = Math.min((contractCount / contractLimit) * 100, 100);
-  const isNearLimit = contractCount >= contractLimit * 0.8;
-  const isOverLimit = contractCount >= contractLimit;
+  const handleCreateTenant = async () => {
+    if (!newTenantName.trim() || !user?.id) return;
+    setCreatingTenant(true);
+    try {
+      const res = await fetch('/api/tenants/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          name: newTenantName,
+          type: newTenantType,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowNewTenantDialog(false);
+        setNewTenantName('');
+        window.location.reload();
+      }
+    } catch {
+      // 网络错误静默处理
+    }
+    setCreatingTenant(false);
+  };
 
-  const handleUpgrade = async () => {
-    setPayLoading(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setPayLoading(false);
-    setPaySuccess(true);
-    setTimeout(() => {
-      setPaySuccess(false);
-      setShowUpgradeModal(false);
-      setMemberLevel('pro');
-      setMemberExpireAt(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
-    }, 1500);
+  const handleSwitchTenant = (id: string) => {
+    switchTenant(id);
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">个人中心</h1>
-        <p className="text-muted-foreground mt-1">管理您的个人信息和会员服务</p>
+        <h1 className="text-3xl font-bold tracking-tight">系统设置</h1>
+        <p className="text-muted-foreground mt-1">管理账户信息、通知偏好和安全设置</p>
       </div>
 
-      {/* 会员信息 - 醒目展示 */}
-      <Card className={`border-2 ${memberLevel === 'free' ? 'border-muted' : 'border-amber-200 bg-gradient-to-br from-amber-50/80 to-white dark:from-amber-950/10 dark:to-background'}`}>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-4">
-              <div className={`h-14 w-14 rounded-full ${memberLevel === 'pro' ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'} flex items-center justify-center`}>
-                <Crown className={`h-7 w-7 ${memberLevel === 'pro' ? 'text-amber-500' : 'text-muted-foreground'}`} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">
-                  {memberLevel === 'pro' ? '年度会员' : '免费版'}
-                </h2>
-                {memberLevel === 'pro' && memberExpireAt && !isExpired && (
-                  <p className="text-sm text-muted-foreground">
-                    到期时间：{formatDate(memberExpireAt, 'yyyy年MM月dd日')}
-                    <span className="ml-1 text-amber-600 font-medium">
-                      （还剩 {Math.ceil((memberExpireAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))} 天）
-                    </span>
-                  </p>
-                )}
-                {memberLevel === 'free' && (
-                  <p className="text-sm text-muted-foreground">
-                    已使用 {contractCount}/{contractLimit} 份合同
-                  </p>
-                )}
-              </div>
-            </div>
-            {memberLevel === 'free' && (
-              <Button onClick={() => setShowUpgradeModal(true)} className="gap-1 shrink-0">
-                <Sparkles className="h-4 w-4" />
-                升级会员
-              </Button>
-            )}
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="profile"><User className="h-4 w-4 mr-2" />个人信息</TabsTrigger>
+          <TabsTrigger value="account"><Building2 className="h-4 w-4 mr-2" />账号管理</TabsTrigger>
+          <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-2" />通知设置</TabsTrigger>
+          <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" />安全设置</TabsTrigger>
+        </TabsList>
 
-          {/* 合同用量进度条（免费版） */}
-          {memberLevel === 'free' && (
-            <div className="mt-4">
-              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${isNearLimit ? 'bg-amber-500' : 'bg-primary'}`}
-                  style={{ width: `${usagePercent}%` }} />
-              </div>
-              {isOverLimit && (
-                <p className="text-xs text-destructive mt-1 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />合同已达上限，请升级会员或删除旧合同
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* 会员权益标签 */}
-          {memberLevel === 'pro' && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {['无限合同', 'AI智能解析', '合同导出', '邮件提醒', '高优客服'].map((f) => (
-                <Badge key={f} variant="secondary" className="bg-amber-100/50 dark:bg-amber-900/20 text-xs gap-1">
-                  <CheckCircle2 className="h-3 w-3 text-green-500" />{f}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 个人信息 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2"><User className="h-5 w-5 text-primary" />个人信息</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2"><Label>姓名</Label><Input defaultValue="张经理" /></div>
-          <div className="space-y-2"><Label>邮箱</Label><Input defaultValue="zhang@e-hetong.com" /></div>
-          <div className="space-y-2"><Label>手机号</Label><Input placeholder="绑定手机号可接收短信提醒" /></div>
-          <Button variant="outline">保存修改</Button>
-        </CardContent>
-      </Card>
-
-      {/* 通知设置 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2"><Bell className="h-5 w-5 text-primary" />通知设置</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div><p className="font-medium">站内信通知</p><p className="text-sm text-muted-foreground">登录后在站内接收提醒</p></div>
-            <Badge variant="success">已开启</Badge>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">邮件通知</p>
-              <p className="text-sm text-muted-foreground">{memberLevel === 'free' ? '升级年度会员可用' : '通过邮箱接收到期提醒'}</p>
-            </div>
-            {memberLevel === 'free' ? (
-              <Button variant="ghost" size="sm" className="text-primary" onClick={() => setShowUpgradeModal(true)}>升级解锁</Button>
-            ) : (
-              <Badge variant="success">已开启</Badge>
-            )}
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div><p className="font-medium">微信通知</p><p className="text-sm text-muted-foreground">通过公众号接收提醒</p></div>
-            <Badge variant="secondary">未绑定</Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 升级弹窗 */}
-      <Modal open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
-        <ModalContent className="max-w-lg">
-          <ModalHeader><ModalTitle>选择升级方案</ModalTitle></ModalHeader>
-          <div className="p-6">
-            {paySuccess ? (
-              <div className="text-center py-8">
-                <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-                  <Check className="h-8 w-8 text-green-600" />
+        {/* Tab 1: 个人信息 */}
+        <TabsContent value="profile" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />基本信息
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary">
+                  {user?.name?.[0] || user?.email?.[0] || '?'}
                 </div>
-                <h3 className="text-xl font-bold mb-2">🎉 升级成功！</h3>
-                <p className="text-muted-foreground">您已是年度会员，所有功能已解锁</p>
+                <div>
+                  <p className="font-medium">{user?.name || '未设置姓名'}</p>
+                  <p className="text-sm text-muted-foreground">{user?.email || user?.phone || ''}</p>
+                  <Badge variant="outline" className="mt-1">
+                    {user?.role === 'admin' ? '管理员' : '普通用户'}
+                  </Badge>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {PLANS.filter((p) => p.id !== 'free').map((plan) => (
-                  <div
-                    key={plan.id}
-                    className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      selectedPlan === plan.id
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-muted hover:border-muted-foreground/30'
-                    }`}
-                    onClick={() => setSelectedPlan(plan.id)}
-                  >
-                    {plan.badge && (
-                      <div className="absolute -top-2.5 right-4">
-                        <Badge className="bg-gradient-to-r from-primary to-purple-500">{plan.badge}</Badge>
+
+              <div className="space-y-2">
+                <Label>姓名</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入您的姓名" />
+              </div>
+              <div className="space-y-2">
+                <Label>邮箱</Label>
+                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" type="email" />
+              </div>
+              <div className="space-y-2">
+                <Label>手机号</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="绑定手机号可接收提醒" type="tel" disabled />
+                <p className="text-xs text-muted-foreground">手机号暂不支持在线修改</p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button onClick={handleSaveProfile} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  保存修改
+                </Button>
+                {saveSuccess && (
+                  <span className="text-sm text-green-600 flex items-center gap-1">
+                    <Check className="h-4 w-4" />保存成功
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 会员信息 */}
+          <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50/80 to-white">
+            <CardContent className="p-6">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Crown className="h-7 w-7 text-amber-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">{user?.memberLevel === 'pro' ? '年度会员' : '免费版'}</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.memberLevel === 'pro' ? '无限合同 · AI智能解析 · 邮件提醒' : '基础合同管理 · 手动分类'}
+                    </p>
+                  </div>
+                </div>
+                {user?.memberLevel !== 'pro' && (
+                  <Button onClick={() => router.push('/pricing')} className="gap-1">
+                    <Sparkles className="h-4 w-4" />升级会员
+                  </Button>
+                )}
+              </div>
+              {user?.memberLevel === 'pro' && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {['无限合同', 'AI智能解析', '合同导出', '邮件提醒', '高优客服'].map((f) => (
+                    <Badge key={f} variant="secondary" className="bg-amber-100/50 text-xs gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />{f}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 2: 账号管理 */}
+        <TabsContent value="account" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />我的账号
+              </CardTitle>
+              <CardDescription>一个手机号可同时拥有个人账号和企业账号，数据完全隔离</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {tenantList.map((t) => {
+                const Icon = TENANT_ICONS[t.sceneType] || Home;
+                const isActive = tenant?.tenantId === t.tenantId;
+                return (
+                  <div key={t.tenantId} className={`p-4 rounded-xl border-2 transition-all ${isActive ? 'border-primary bg-primary/5' : 'border-muted hover:border-muted-foreground/30'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-lg ${isActive ? 'bg-primary text-white' : 'bg-muted'} flex items-center justify-center`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{t.tenantName}</p>
+                            <Badge variant={isActive ? 'default' : 'outline'} className="text-xs">
+                              {isActive ? '当前' : '切换'}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {TENANT_LABELS[t.sceneType] || '个人'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {t.role === 'OWNER' ? '所有者' : t.role === 'ADMIN' ? '管理员' : '成员'}
+                            {' · '}数据完全隔离
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-bold">{plan.name}</h3>
-                        <p className="text-sm text-muted-foreground">{plan.contractLimit}合同 · 无限AI解析</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-primary">{plan.price}</p>
-                        <p className="text-xs text-muted-foreground">{plan.period}</p>
-                      </div>
-                    </div>
-                    {plan.savings && <p className="text-xs text-primary mt-1">{plan.savings}</p>}
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {plan.features.map((f) => (
-                        <span key={f} className="text-xs text-muted-foreground flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-green-500" />{f}
-                        </span>
-                      ))}
+                      {!isActive && (
+                        <Button variant="outline" size="sm" onClick={() => handleSwitchTenant(t.tenantId)}>
+                          <RefreshCw className="h-3 w-3 mr-1" />切换到此账号
+                        </Button>
+                      )}
                     </div>
                   </div>
-                ))}
+                );
+              })}
 
-                <div className="bg-amber-50 dark:bg-amber-950/10 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>支付功能开发中，当前为演示模式。点击下方按钮模拟升级成功。</span>
-                </div>
+              <Separator />
 
-                <div className="flex gap-3 pt-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowUpgradeModal(false)}>取消</Button>
-                  <Button className="flex-1" onClick={handleUpgrade} loading={payLoading}>
-                    {payLoading ? '处理中...' : `升级 ${PLANS.find((p) => p.id === selectedPlan)?.name || ''}`}
-                  </Button>
+              <div>
+                <Button variant="outline" className="w-full gap-2" onClick={() => setShowNewTenantDialog(true)}>
+                  <Plus className="h-4 w-4" />创建新账号
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  用同一手机号创建新的企业账号或个人账号，数据完全隔离
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 新建账号弹窗 */}
+          {showNewTenantDialog && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setShowNewTenantDialog(false)}>
+              <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold mb-4">创建新账号</h3>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>账号类型</Label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className={`flex-1 p-3 rounded-lg border-2 text-center ${newTenantType === 'PERSONAL' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                        onClick={() => setNewTenantType('PERSONAL')}
+                      >
+                        <Home className="h-5 w-5 mx-auto mb-1" />
+                        <p className="text-sm font-medium">个人账号</p>
+                        <p className="text-xs text-muted-foreground">个人使用</p>
+                      </button>
+                      <button
+                        type="button"
+                        className={`flex-1 p-3 rounded-lg border-2 text-center ${newTenantType === 'ENTERPRISE' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                        onClick={() => setNewTenantType('ENTERPRISE')}
+                      >
+                        <Building2 className="h-5 w-5 mx-auto mb-1" />
+                        <p className="text-sm font-medium">企业账号</p>
+                        <p className="text-xs text-muted-foreground">公司/团队使用</p>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>账号名称</Label>
+                    <Input
+                      value={newTenantName}
+                      onChange={(e) => setNewTenantName(e.target.value)}
+                      placeholder={newTenantType === 'PERSONAL' ? '如：我的个人空间' : '如：XX科技有限公司'}
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button variant="outline" className="flex-1" onClick={() => setShowNewTenantDialog(false)}>取消</Button>
+                    <Button className="flex-1" onClick={handleCreateTenant} disabled={creatingTenant || !newTenantName.trim()}>
+                      {creatingTenant ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      创建
+                    </Button>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        </ModalContent>
-      </Modal>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><LogOut className="h-5 w-5 text-destructive" />退出登录</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">退出后需要重新输入账号密码登录</p>
+              <Button variant="destructive" onClick={logout}>退出当前账号</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 3: 通知设置 */}
+        <TabsContent value="notifications" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Bell className="h-5 w-5 text-primary" />通知偏好</CardTitle>
+              <CardDescription>选择您希望接收提醒的方式</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { icon: Bell, title: '站内信通知', desc: '登录后在系统内接收提醒', key: 'in_app', enabled: true, pro: false },
+                { icon: Mail, title: '邮件通知', desc: '通过邮箱接收到期提醒、账单通知', key: 'email', enabled: user?.memberLevel === 'pro', pro: true },
+                { icon: Smartphone, title: '短信通知', desc: '通过手机号接收重要到期提醒', key: 'sms', enabled: false, pro: true },
+                { icon: Bell, title: '微信通知', desc: '通过公众号接收合同到期提醒', key: 'wechat', enabled: false, pro: true },
+              ].map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <div key={item.key}>
+                    <div className="flex items-center justify-between py-2">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-muted">
+                          <ItemIcon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.desc}</p>
+                        </div>
+                      </div>
+                      {item.enabled ? (
+                        <Badge variant="success" className="bg-green-100 text-green-700 border-green-200 shrink-0">已开启</Badge>
+                      ) : (
+                        <Button variant="ghost" size="sm" className="text-primary shrink-0" onClick={() => router.push('/pricing')}>
+                          升级解锁
+                        </Button>
+                      )}
+                    </div>
+                    <Separator />
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Tab 4: 安全设置 */}
+        <TabsContent value="security" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Key className="h-5 w-5 text-primary" />登录密码</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>当前密码</Label>
+                <Input type="password" placeholder="输入当前密码" />
+              </div>
+              <div className="space-y-2">
+                <Label>新密码</Label>
+                <Input type="password" placeholder="至少6位" />
+              </div>
+              <div className="space-y-2">
+                <Label>确认新密码</Label>
+                <Input type="password" placeholder="再次输入新密码" />
+              </div>
+              <Button variant="outline">修改密码</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2"><Smartphone className="h-5 w-5 text-primary" />登录设备</CardTitle>
+              <CardDescription>管理已登录的设备</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-blue-50">
+                    <Smartphone className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">当前设备</p>
+                    <p className="text-xs text-muted-foreground">Mac · Chrome · 刚刚在线</p>
+                  </div>
+                </div>
+                <Badge variant="success" className="bg-green-100 text-green-700 shrink-0">当前</Badge>
+              </div>
+              <Separator className="my-2" />
+              <div className="flex items-center justify-between py-2">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-muted">
+                    <Smartphone className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">iPhone 15</p>
+                    <p className="text-xs text-muted-foreground">Safari · 3天前</p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" className="text-destructive shrink-0">移除</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
