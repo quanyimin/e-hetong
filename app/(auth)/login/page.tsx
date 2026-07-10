@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,15 +9,7 @@ import { Label } from '@/components/ui/label';
 import { FileText, AlertCircle, Smartphone, Mail, Loader2 } from 'lucide-react';
 import { getTierFromMemberLevel } from '@/lib/adaptive';
 
-const DEMO_ACCOUNTS: Record<string, { password: string; name: string; role: string; memberLevel: string }> = {
-  'demo@e-hetong.com': { password: 'demo123', name: '张经理', role: 'user', memberLevel: 'free' },
-  '13800000002': { password: 'demo123', name: '张经理', role: 'user', memberLevel: 'free' },
-  'admin@e-hetong.com': { password: 'admin123', name: '管理员', role: 'admin', memberLevel: 'pro' },
-  '13800000001': { password: 'admin123', name: '管理员', role: 'admin', memberLevel: 'pro' },
-};
-
 export default function LoginPage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(false);
   const [loginType, setLoginType] = React.useState<'email' | 'phone'>('email');
   const [account, setAccount] = React.useState('');
@@ -39,18 +30,25 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await new Promise((r) => setTimeout(r, 1000));
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: loginType === 'email' ? account : undefined,
+          phone: loginType === 'phone' ? account : undefined,
+          password,
+        }),
+      });
 
-      // 校验账号密码
-      const user = DEMO_ACCOUNTS[account];
-      if (!user || user.password !== password) {
-        setError('账号或密码错误');
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error || '账号或密码错误');
         setIsLoading(false);
         return;
       }
 
-      // 根据会员等级判断跳转目标
-      const tier = getTierFromMemberLevel(user.memberLevel);
+      localStorage.setItem('ehetong_user', JSON.stringify(data.user));
+      const tier = getTierFromMemberLevel(data.user?.memberLevel || 'free');
       const redirectPath = tier === 'personal' ? '/home' : '/dashboard';
       window.location.href = redirectPath;
     } catch {
@@ -108,12 +106,6 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="mt-4 p-3 rounded-md bg-muted/50 text-xs text-muted-foreground">
-          <p className="font-medium mb-1">💡 演示账号</p>
-          <p>邮箱：<code className="bg-background px-1 rounded">demo@e-hetong.com</code></p>
-          <p>手机：<code className="bg-background px-1 rounded">13800000002</code></p>
-          <p>密码：<code className="bg-background px-1 rounded">demo123</code></p>
-        </div>
       </CardContent>
       <CardFooter className="justify-center">
         <p className="text-sm text-muted-foreground">

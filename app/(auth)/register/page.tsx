@@ -12,7 +12,6 @@ import { getTierFromMemberLevel } from '@/lib/adaptive';
 export default function RegisterPage() {
   const [step, setStep] = React.useState<'form' | 'success'>('form');
   const [isLoading, setIsLoading] = React.useState(false);
-  const [name, setName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -31,7 +30,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim()) { setError('请输入姓名'); return; }
     if (regType === 'email' && !email.trim()) { setError('请输入邮箱'); return; }
     if (regType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('邮箱格式不正确'); return; }
     if (regType === 'phone' && !/^1\d{10}$/.test(phone)) { setError('手机号格式不正确'); return; }
@@ -43,7 +41,7 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email: regType === 'email' ? email : undefined, phone: regType === 'phone' ? phone : undefined, password, inviteCode: inviteCode || undefined }),
+        body: JSON.stringify({ email: regType === 'email' ? email : undefined, phone: regType === 'phone' ? phone : undefined, password, inviteCode: inviteCode || undefined }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -96,13 +94,12 @@ export default function RegisterPage() {
               <button type="button" className={`flex-1 py-2 text-sm rounded-md ${regType === 'email' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`} onClick={() => setRegType('email')}><Mail className="h-3.5 w-3.5 inline mr-1" />邮箱注册</button>
               <button type="button" className={`flex-1 py-2 text-sm rounded-md ${regType === 'phone' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground'}`} onClick={() => setRegType('phone')}><Smartphone className="h-3.5 w-3.5 inline mr-1" />手机注册</button>
             </div>
-            <div><Label>姓名</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="您的姓名" required /></div>
             {regType === 'email' ? (
               <div><Label>邮箱</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" /></div>
             ) : (
               <div><Label>手机号</Label><Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="13800138000" /></div>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
               <div><Label>密码</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少6位" /></div>
               <div><Label>确认密码</Label><Input type="password" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} placeholder="再次输入" /></div>
             </div>
