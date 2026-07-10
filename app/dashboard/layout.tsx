@@ -95,7 +95,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setCreatingEnterprise(false);
   };
 
-  // 营业执照OCR识别
+  // 营业执照OCR识别 — 调用百度专用营业执照 API，直接获取结构化字段
   const handleBizLicenseUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -103,28 +103,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     reader.onload = async () => {
       const base64 = reader.result as string;
       try {
-        const res = await fetch('/api/ocr/qianfan', {
+        const res = await fetch('/api/ocr/business-license', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, type: 'business_license' }),
+          body: JSON.stringify({ image: base64 }),
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.text) {
-            // 简单解析识别文本
-            const lines = data.text.split('\n');
-            lines.forEach((line: string) => {
-              if (line.includes('名称') || line.includes('企业')) setEnterpriseName(prev => prev || line.replace(/.*[：:]\s*/, '').trim());
-              if (line.includes('法人') || line.includes('法定代表人')) setLegalPerson(prev => prev || line.replace(/.*[：:]\s*/, '').trim());
-              if (line.includes('期限') || line.includes('有效期')) {
-                const match = line.match(/\d{4}[-年]\d{1,2}[-月]\d{1,2}/);
-                if (match) setValidUntil(prev => prev || match[0].replace(/年/g, '-').replace(/月/g, '-'));
-              }
-            });
+          if (data.success && data.fields) {
+            // 百度营业执照 OCR 返回结构化字段
+            const f = data.fields;
+            // 字段映射: 百度API返回的字段名
+            setEnterpriseName(f.companyName || f.单位名称 || '');
+            setLegalPerson(f.legalPerson || f.法人代表 || f.法定代表人 || '');
+            if (f.validityPeriod || f.有效期) {
+              const dateStr = f.validityPeriod || f.有效期;
+              const match = dateStr.match(/\d{4}[-年]\d{1,2}[-月]\d{1,2}/);
+              if (match) setValidUntil(match[0].replace(/年/g, '-').replace(/月/g, '-'));
+            }
+            toast.success('营业执照识别成功');
           }
         }
       } catch {
-        // OCR 识别失败不影响手动输入
+        toast.error('营业执照识别失败，请手动填写');
       }
     };
     reader.readAsDataURL(file);
