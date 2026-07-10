@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth-context';
 
 interface Department {
   id: string;
@@ -72,6 +73,7 @@ function DeptFormModal({
   title,
   departments,
   initialData,
+  tenantId,
   onSuccess,
 }: {
   open: boolean;
@@ -79,6 +81,7 @@ function DeptFormModal({
   title: string;
   departments: Department[];
   initialData?: Department;
+  tenantId: string;
   onSuccess: () => void;
 }) {
   const [name, setName] = useState(initialData?.name || '');
@@ -128,9 +131,10 @@ function DeptFormModal({
     setLoading(true);
     setError('');
     try {
-      const url = initialData
+      const baseUrl = initialData
         ? `/api/enterprise/org/${initialData.id}`
         : '/api/enterprise/org';
+      const url = `${baseUrl}?tenantId=${encodeURIComponent(tenantId)}`;
       const method = initialData ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -250,9 +254,11 @@ function ConfirmDeleteModal({
 // ===================== Department Detail Panel =====================
 function DeptDetailPanel({
   department,
+  tenantId,
   onClose,
 }: {
   department: Department;
+  tenantId: string;
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<DeptDetail | null>(null);
@@ -260,7 +266,7 @@ function DeptDetailPanel({
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/enterprise/org/${department.id}`)
+    fetch(`/api/enterprise/org/${department.id}?tenantId=${encodeURIComponent(tenantId)}`)
       .then(res => res.json())
       .then(data => {
         if (data.code === 0) setDetail(data.data);
@@ -351,6 +357,8 @@ function DeptDetailPanel({
 
 // ===================== Main Page =====================
 export default function EnterpriseOrgPage() {
+  const { tenant } = useAuth();
+  const tenantId = tenant?.tenantId || 'default';
   const [departments, setDepartments] = useState<Department[]>([]);
   const [flatDepartments, setFlatDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -369,7 +377,7 @@ export default function EnterpriseOrgPage() {
   const fetchDepartments = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/enterprise/org');
+      const res = await fetch(`/api/enterprise/org?tenantId=${encodeURIComponent(tenantId)}`);
       const data = await res.json();
       const list = data.departments || [];
       setFlatDepartments(list);
@@ -378,7 +386,7 @@ export default function EnterpriseOrgPage() {
       console.error(e);
     }
     setLoading(false);
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => { fetchDepartments(); }, [fetchDepartments]);
 
@@ -419,7 +427,7 @@ export default function EnterpriseOrgPage() {
     if (!deleteDept) return;
     setDeleteLoading(true);
     try {
-      const res = await fetch(`/api/enterprise/org/${deleteDept.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/enterprise/org/${deleteDept.id}?tenantId=${encodeURIComponent(tenantId)}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.code === 0) {
         setDeleteOpen(false);
@@ -573,6 +581,7 @@ export default function EnterpriseOrgPage() {
         {selectedDept && (
           <DeptDetailPanel
             department={selectedDept}
+            tenantId={tenantId}
             onClose={() => setSelectedDept(undefined)}
           />
         )}
@@ -584,6 +593,7 @@ export default function EnterpriseOrgPage() {
         onOpenChange={setCreateOpen}
         title="新增部门"
         departments={flatDepartments}
+        tenantId={tenantId}
         onSuccess={fetchDepartments}
       />
 
@@ -594,6 +604,7 @@ export default function EnterpriseOrgPage() {
         title="编辑部门"
         departments={flatDepartments}
         initialData={editingDept}
+        tenantId={tenantId}
         onSuccess={fetchDepartments}
       />
 
