@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ===================== Types =====================
 interface Reminder {
@@ -314,6 +315,7 @@ function NewReminderModal({
       }
     } catch (e) {
       console.error(e);
+      toast.error('操作失败，请重试');
     }
     setLoading(false);
   };
@@ -444,6 +446,7 @@ export default function RemindersPage() {
       }
     } catch (e) {
       console.error(e);
+      toast.error('操作失败，请重试');
     }
     setLoading(false);
   }, [tenantId, typeFilter, statusFilter]);
@@ -462,6 +465,7 @@ export default function RemindersPage() {
       fetchData();
     } catch (e) {
       console.error(e);
+      toast.error('操作失败，请重试');
     }
   };
 
@@ -472,6 +476,7 @@ export default function RemindersPage() {
       fetchData();
     } catch (e) {
       console.error(e);
+      toast.error('操作失败，请重试');
     }
   };
 

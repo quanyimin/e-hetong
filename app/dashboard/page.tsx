@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,13 +34,16 @@ const SCENE_CONFIG: Record<string, { name: string; icon: any; color: string; hre
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [stats, setStats] = useState<any>({});
   const [recentContracts, setRecentContracts] = useState<any[]>([]);
   const [billsDue, setBillsDue] = useState<any[]>([]);
   const [upcomingItems, setUpcomingItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    setFetchError(null);
     Promise.all([
       fetch('/api/dashboard/stats').then(r => r.json()),
       fetch('/api/contracts?limit=5').then(r => r.json()),
@@ -50,7 +54,10 @@ export default function DashboardPage() {
       setRecentContracts(contractsData.data || contractsData.contracts || []);
       setBillsDue(billsData.bills || []);
       setUpcomingItems(upcomingData.items || []);
-    }).catch(console.error).finally(() => setLoading(false));
+    }).catch(e => {
+      console.error(e);
+      setFetchError('部分数据加载失败');
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -59,6 +66,13 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* 错误提示 */}
+      {fetchError && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" />{fetchError}
+        </div>
+      )}
+
       {/* 概览统计 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -221,22 +235,32 @@ export default function DashboardPage() {
         </div>
         <Card>
           <CardContent className="p-0">
-            <div className="divide-y">
-              {recentContracts.slice(0, 5).map((c: any) => (
-                <Link key={c.id} href={`/dashboard/contracts/${c.id}`}>
-                  <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{c.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{c.partyA || c.partyB || ''}</p>
+            {recentContracts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">暂无最近合同</p>
+                <Button variant="link" size="sm" onClick={() => router.push('/dashboard/contracts')}>
+                  去上传合同
+                </Button>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {recentContracts.slice(0, 5).map((c: any) => (
+                  <Link key={c.id} href={`/dashboard/contracts/${c.id}`}>
+                    <div className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{c.partyA || c.partyB || ''}</p>
+                      </div>
+                      <div className="text-right shrink-0 ml-3">
+                        <p className="text-sm font-medium">{c.amount ? `¥${c.amount.toLocaleString()}` : '-'}</p>
+                        <Badge variant="outline" className="text-xs">{c.status || ''}</Badge>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <p className="text-sm font-medium">{c.amount ? `¥${c.amount.toLocaleString()}` : '-'}</p>
-                      <Badge variant="outline" className="text-xs">{c.status || ''}</Badge>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

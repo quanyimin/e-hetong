@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { FileText, Gift, Mail, Smartphone, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
-import { getTierFromMemberLevel } from '@/lib/adaptive';
+import { useAuth } from '@/lib/auth-context';
 
 export default function RegisterPage() {
   const [step, setStep] = React.useState<'form' | 'success'>('form');
@@ -19,6 +19,7 @@ export default function RegisterPage() {
   const [inviteCode, setInviteCode] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [regType, setRegType] = React.useState<'email' | 'phone'>('email');
+  const { register } = useAuth();
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -37,26 +38,21 @@ export default function RegisterPage() {
     if (password !== confirmPwd) { setError('两次密码不一致'); return; }
 
     setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: regType === 'email' ? email : undefined, phone: regType === 'phone' ? phone : undefined, password, inviteCode: inviteCode || undefined }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        setError(data.error || '注册失败');
-        setIsLoading(false);
-        return;
-      }
-      localStorage.setItem('ehetong_user', JSON.stringify(data.user));
+
+    // 使用 auth context 的 register 方法，确保 localStorage key 一致
+    const name = regType === 'email' ? (email.split('@')[0] || email) : phone;
+    const result = await register({
+      name,
+      email: regType === 'email' ? email : undefined,
+      phone: regType === 'phone' ? phone : undefined,
+      password,
+    });
+
+    if (result.success) {
       setStep('success');
-      // 新注册用户默认为 free 等级，跳转到个人版首页
-      const tier = getTierFromMemberLevel(data.user?.memberLevel || 'free');
-      const redirectPath = tier === 'personal' ? '/home' : '/dashboard';
-      setTimeout(() => { window.location.href = redirectPath; }, 1500);
-    } catch {
-      setError('网络错误，请稍后重试');
+      // useAuth().register() 已处理本地存储（key: ehetong_auth）和页面跳转
+    } else {
+      setError(result.error || '注册失败');
       setIsLoading(false);
     }
   };

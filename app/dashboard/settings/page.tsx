@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
   User, Mail, Phone, Crown, Bell, Shield, Key, Smartphone,
-  CheckCircle2, AlertTriangle, Sparkles, Loader2, Check,
+  AlertCircle, CheckCircle2, AlertTriangle, Sparkles, Loader2, Check,
   Building2, Home, Store, Plus, RefreshCw, LogOut
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -43,6 +43,35 @@ export default function SettingsPage() {
   const [newTenantType, setNewTenantType] = React.useState<'PERSONAL' | 'ENTERPRISE'>('PERSONAL');
   const [newTenantName, setNewTenantName] = React.useState('');
   const [creatingTenant, setCreatingTenant] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // 密码修改
+  const [passwordForm, setPasswordForm] = React.useState({ current: '', newPwd: '', confirm: '' });
+  const [changingPwd, setChangingPwd] = React.useState(false);
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.current) { setError('请输入当前密码'); return; }
+    if (passwordForm.newPwd.length < 6) { setError('新密码至少6位'); return; }
+    if (passwordForm.newPwd !== passwordForm.confirm) { setError('两次密码不一致'); return; }
+    setChangingPwd(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, currentPassword: passwordForm.current, newPassword: passwordForm.newPwd }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPasswordForm({ current: '', newPwd: '', confirm: '' });
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setError(data.error || '修改失败');
+      }
+    } catch { setError('网络错误'); }
+    setChangingPwd(false);
+  };
 
   // 同步用户数据
   React.useEffect(() => {
@@ -65,22 +94,25 @@ export default function SettingsPage() {
         updateUser({ name, email });
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setError(data.error || '保存失败');
       }
     } catch {
-      // 网络错误静默处理
+      setError('网络错误，请重试');
     }
     setSaving(false);
   };
 
   const handleCreateTenant = async () => {
-    if (!newTenantName.trim() || !user?.id) return;
+    if (!newTenantName.trim()) { setError('请输入账号名称'); return; }
     setCreatingTenant(true);
+    setError(null);
     try {
       const res = await fetch('/api/tenants/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
+          userId: user?.id,
           name: newTenantName,
           type: newTenantType,
         }),
@@ -90,9 +122,11 @@ export default function SettingsPage() {
         setShowNewTenantDialog(false);
         setNewTenantName('');
         window.location.reload();
+      } else {
+        setError(data.error || '创建失败');
       }
     } catch {
-      // 网络错误静默处理
+      setError('网络错误，请重试');
     }
     setCreatingTenant(false);
   };
@@ -151,6 +185,12 @@ export default function SettingsPage() {
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="绑定手机号可接收提醒" type="tel" disabled />
                 <p className="text-xs text-muted-foreground">手机号暂不支持在线修改</p>
               </div>
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               <div className="flex items-center gap-3 pt-2">
                 <Button onClick={handleSaveProfile} disabled={saving}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -295,6 +335,12 @@ export default function SettingsPage() {
                       placeholder={newTenantType === 'PERSONAL' ? '如：我的个人空间' : '如：XX科技有限公司'}
                     />
                   </div>
+                  {error && (
+                    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
                   <div className="flex gap-3 pt-2">
                     <Button variant="outline" className="flex-1" onClick={() => setShowNewTenantDialog(false)}>取消</Button>
                     <Button className="flex-1" onClick={handleCreateTenant} disabled={creatingTenant || !newTenantName.trim()}>
@@ -368,19 +414,27 @@ export default function SettingsPage() {
               <CardTitle className="text-lg flex items-center gap-2"><Key className="h-5 w-5 text-primary" />登录密码</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {error && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>当前密码</Label>
-                <Input type="password" placeholder="输入当前密码" />
+                <Input type="password" placeholder="输入当前密码" value={passwordForm.current} onChange={(e) => setPasswordForm(p => ({...p, current: e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label>新密码</Label>
-                <Input type="password" placeholder="至少6位" />
+                <Input type="password" placeholder="至少6位" value={passwordForm.newPwd} onChange={(e) => setPasswordForm(p => ({...p, newPwd: e.target.value}))} />
               </div>
               <div className="space-y-2">
                 <Label>确认新密码</Label>
-                <Input type="password" placeholder="再次输入新密码" />
+                <Input type="password" placeholder="再次输入新密码" value={passwordForm.confirm} onChange={(e) => setPasswordForm(p => ({...p, confirm: e.target.value}))} />
               </div>
-              <Button variant="outline">修改密码</Button>
+              <Button variant="outline" onClick={handleChangePassword} disabled={changingPwd}>
+                {changingPwd ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}修改密码
+              </Button>
             </CardContent>
           </Card>
 

@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DollarSign, TrendingUp, TrendingDown, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Download, Crown } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
 
 function BarChart({ data }: { data: { label: string; income: number; expense: number }[] }) {
   const max = Math.max(...data.flatMap(d => [d.income, d.expense]), 1);
@@ -31,10 +33,19 @@ function BarChart({ data }: { data: { label: string; income: number; expense: nu
 }
 
 export default function FinancePage() {
+  const { user, tenant } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const isEnterprise = tenant?.sceneType === 'ENTERPRISE' || user?.memberLevel === 'enterprise' || user?.memberLevel === 'pro';
+
   useEffect(() => {
+    if (!user || !tenant) return;
+    if (!isEnterprise) {
+      router.push('/pricing?ref=finance');
+      return;
+    }
     fetch('/api/finance/stats')
       .then(r => r.json())
       .then(res => {
@@ -69,6 +80,19 @@ export default function FinancePage() {
           <Download className="h-4 w-4" /> 导出月报
         </Button>
       </div>
+
+      {/* 企业会员提示 */}
+      {!isEnterprise && (
+        <Card className="border-2 border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-amber-500" />
+              <p className="text-sm">财务看板为企业会员专属功能</p>
+            </div>
+            <Button size="sm" onClick={() => router.push('/pricing')}>升级会员</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

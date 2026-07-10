@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Search, Plus, FileText, ArrowUpDown, Eye, Trash2, AlertTriangle, Loader2, ChevronDown, Download, Upload, X, CheckSquare, Square } from 'lucide-react';
 import { formatAmount } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
 
 interface ContractItem {
   id: string; name: string; type: string; partyA: string; partyB: string;
@@ -32,6 +33,8 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
 };
 
 export default function ContractsPage() {
+  const { tenant } = useAuth();
+  const effectiveTenantId = tenant?.tenantId || 'default';
   const [contracts, setContracts] = React.useState<ContractItem[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -62,7 +65,7 @@ export default function ContractsPage() {
   const loadContracts = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/contracts?userId=user_demo_001&pageSize=100');
+      const res = await fetch(`/api/contracts?tenantId=${effectiveTenantId}&pageSize=100`);
       const data = await res.json();
       setContracts(data.data?.list || []);
     } catch (e) {
@@ -137,7 +140,7 @@ export default function ContractsPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await fetch(`/api/contracts?id=${deleteTarget}&userId=user_demo_001`, { method: 'DELETE' });
+      await fetch(`/api/contracts?id=${deleteTarget}&tenantId=${effectiveTenantId}`, { method: 'DELETE' });
       setContracts((prev) => prev.filter((c) => c.id !== deleteTarget));
       // 如果删除的是已选中的，清除选中状态
       setSelectedIds((prev) => { const next = new Set(prev); next.delete(deleteTarget); return next; });
@@ -153,7 +156,7 @@ export default function ContractsPage() {
       const res = await fetch('/api/contracts/batch', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        body: JSON.stringify({ tenantId: effectiveTenantId, ids: Array.from(selectedIds) }),
       });
       const data = await res.json();
       if (data.success) {

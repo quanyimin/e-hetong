@@ -9,6 +9,7 @@ import {
   GraduationCap, HeartPulse, Truck, Sprout, Wrench, HardHat,
   Check, Loader2, Store, AlertCircle, ExternalLink
 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 const ICON_MAP: Record<string, any> = {
   FileText, Building2, UtensilsCrossed, HardHat, ShoppingCart,
@@ -28,10 +29,9 @@ export default function PluginsPage() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 获取当前租户ID（简化：从 localStorage 或 URL）
-  const tenantId = typeof window !== 'undefined' 
-    ? (JSON.parse(localStorage.getItem('ehetong_user') || '{}')?.tenantId || 'default')
-    : 'default';
+  // 从 auth context 获取当前租户ID
+  const { tenant } = useAuth();
+  const tenantId = tenant?.tenantId || 'default';
 
   useEffect(() => {
     fetchPlugins();

@@ -40,6 +40,7 @@ import {
   BadgeCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface Department {
   id: string;
@@ -426,10 +427,10 @@ export default function EnterpriseOrgPage() {
         if (selectedDept?.id === deleteDept.id) setSelectedDept(undefined);
         fetchDepartments();
       } else {
-        alert(data.message || '删除失败');
+        toast.error(data.message || '删除失败');
       }
     } catch (e) {
-      alert('网络错误');
+      toast.error('网络错误');
     }
     setDeleteLoading(false);
   };
