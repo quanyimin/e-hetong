@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Folder, Search, Building2, BadgeCheck, UtensilsCrossed,
-  CheckCircle, Stamp, History, Camera, Mail, Wand2,
+  CheckCircle, Stamp, History, Camera, Mail, Wand2, Store,
 } from 'lucide-react';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { TenantSwitcher } from '@/components/TenantSwitcher';
@@ -34,6 +34,7 @@ const ALL_ITEMS: SidebarItem[] = [
   // 行业插件专区（根据租户启用情况动态显示）
   { href: '/dashboard/landlord', label: '房东物业', icon: Building2 },
   { href: '/dashboard/restaurant', label: '餐饮门店', icon: UtensilsCrossed },
+  { href: '/dashboard/plugins', label: '插件商店', icon: Store },
   { href: '/dashboard/reminders', label: '提醒管理', icon: Bell },
   // 企业版模块
   { href: '/dashboard/enterprise/org', label: '组织架构', icon: Building2, enterpriseOnly: true },

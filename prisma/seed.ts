@@ -59,7 +59,46 @@ async function main() {
 
   console.log('✅ 场景-版本关联初始化完成');
 
-  // Phase 2: 填充行业模板
+  // Phase 2: 创建行业插件定价数据
+  console.log('\n🔌 开始创建行业插件...');
+
+  const industryPlugins = [
+    { code: 'GENERAL', name: '通用合同管理', description: '基础合同模板+AI解析，适用所有行业', icon: 'FileText', price: 0, isPaid: false },
+    { code: 'LANDLORD', name: '房东/物业租赁', description: '收租台账、押金管理、水电读数、房源管理', icon: 'Building2', price: 188, isPaid: true },
+    { code: 'RESTAURANT', name: '餐饮门店', description: '食材采购、供应商管理、菜品定价、卫生证照', icon: 'UtensilsCrossed', price: 188, isPaid: true },
+    { code: 'CONSTRUCTION', name: '建筑工程', description: '工程进度台账、材料采购、劳务合同、资质管理', icon: 'HardHat', price: 388, isPaid: true },
+    { code: 'RETAIL', name: '贸易零售', description: '进销存合同、供应商管理、对账结算、物流跟踪', icon: 'ShoppingCart', price: 188, isPaid: true },
+    { code: 'TECH', name: '科技互联网', description: '软件授权、技术服务、项目外包、知识产权', icon: 'Monitor', price: 288, isPaid: true },
+    { code: 'EDUCATION', name: '教育培训', description: '课程合同、学员合同、教师合同、退费管理', icon: 'GraduationCap', price: 188, isPaid: true },
+    { code: 'MEDICAL', name: '医疗健康', description: '诊疗合同、设备采购、药品采购、合规管理', icon: 'HeartPulse', price: 388, isPaid: true },
+    { code: 'LOGISTICS', name: '物流运输', description: '运输合同、仓储合同、运单管理、车辆资产', icon: 'Truck', price: 288, isPaid: true },
+    { code: 'AGRICULTURE', name: '农业合作社', description: '农产品购销、土地流转、合作社管理', icon: 'Sprout', price: 188, isPaid: true },
+    { code: 'LIFESTYLE', name: '生活服务', description: '家政合同、维修合同、美容服务合同', icon: 'Wrench', price: 88, isPaid: true },
+  ];
+
+  for (const plugin of industryPlugins) {
+    const scene = await prisma.industryScene.findUnique({ where: { code: plugin.code } });
+
+    await prisma.pluginDefinition.upsert({
+      where: { code: plugin.code },
+      update: { price: plugin.price, isPaid: plugin.isPaid, description: plugin.description, icon: plugin.icon },
+      create: {
+        code: plugin.code,
+        name: plugin.name,
+        description: plugin.description,
+        icon: plugin.icon,
+        type: plugin.code === 'GENERAL' ? 'SYSTEM' : 'INDUSTRY',
+        price: plugin.price,
+        isPaid: plugin.isPaid,
+        status: 'active',
+        sceneId: scene?.id || null,
+      },
+    });
+  }
+
+  console.log(`✅ 行业插件初始化完成，共 ${industryPlugins.length} 个插件`);
+
+  // Phase 3: 填充行业模板
   console.log('\n📋 开始填充行业模板...');
 
   // 查找行业场景ID

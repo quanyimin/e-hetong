@@ -2,25 +2,41 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { FileText, AlertCircle, Smartphone, Mail, Loader2 } from 'lucide-react';
-import { getTierFromMemberLevel } from '@/lib/adaptive';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, loading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = React.useState(false);
   const [loginType, setLoginType] = React.useState<'email' | 'phone'>('email');
   const [account, setAccount] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!authLoading && typeof window !== 'undefined') {
+      const userStorage = localStorage.getItem('ehetong_auth');
+      if (userStorage) {
+        try {
+          const user = JSON.parse(userStorage);
+          if (user?.id) {
+            router.push('/dashboard');
+          }
+        } catch {}
+      }
+    }
+  }, [authLoading, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // 校验
     if (!account.trim()) { setError('请输入账号'); return; }
     if (!password) { setError('请输入密码'); return; }
     if (password.length < 6) { setError('密码至少6位'); return; }
@@ -29,30 +45,9 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: loginType === 'email' ? account : undefined,
-          phone: loginType === 'phone' ? account : undefined,
-          password,
-        }),
-      });
-
-      const data = await res.json();
-      if (!data.success) {
-        setError(data.error || '账号或密码错误');
-        setIsLoading(false);
-        return;
-      }
-
-      localStorage.setItem('ehetong_user', JSON.stringify(data.user));
-      const tier = getTierFromMemberLevel(data.user?.memberLevel || 'free');
-      const redirectPath = tier === 'personal' ? '/home' : '/dashboard';
-      window.location.href = redirectPath;
-    } catch {
-      setError('登录失败，请稍后重试');
+    const result = await login(account, password);
+    if (!result.success) {
+      setError(result.error || '登录失败');
       setIsLoading(false);
     }
   };
@@ -101,8 +96,8 @@ export default function LoginPage() {
             <Input type="password" placeholder="••••••••"
               value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
-          <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-            {isLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />验证中...</> : '登录'}
+          <Button type="submit" className="w-full" size="lg" disabled={isLoading || authLoading}>
+            {isLoading || authLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />验证中...</> : '登录'}
           </Button>
         </form>
 

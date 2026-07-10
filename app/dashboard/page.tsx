@@ -102,7 +102,12 @@ export default function DashboardPage() {
 
       {/* 行业插件看板 */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">行业插件</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">行业插件</h2>
+          <Link href="/dashboard/plugins" className="text-sm text-primary flex items-center gap-1">
+            探索更多插件 <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Object.entries(SCENE_CONFIG).map(([code, config]) => {
             const Icon = config.icon;

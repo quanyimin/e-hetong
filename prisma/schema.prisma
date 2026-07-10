@@ -110,6 +110,7 @@ model Tenant {
 
   roles         UserTenantRole[]
   enabledScenes TenantEnabledScene[]
+  purchasedPlugins PurchasedPlugin[]
   industryVersion IndustryVersion? @relation(fields: [industryVersionId], references: [id])
   departments   Department[]
   approvals     Approval[]
@@ -207,6 +208,7 @@ model PluginDefinition {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   scene IndustryScene? @relation(fields: [sceneId], references: [id])
+  purchases PurchasedPlugin[]
 
   @@map("plugin_definitions")
 }
@@ -222,6 +224,26 @@ model TenantEnabledScene {
 
   @@unique([tenantId, sceneId])
   @@map("tenant_enabled_scenes")
+}
+
+// ===== 已购插件记录 =====
+model PurchasedPlugin {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  pluginId      String   @map("plugin_id")
+  sceneId       String?  @map("scene_id")   // IndustryScene ID
+  status        String   @default("active")  // active | expired | cancelled
+  amount        Float    @default(0)         // 购买金额
+  purchasedAt   DateTime @default(now()) @map("purchased_at")
+  expireAt      DateTime? @map("expire_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plugin PluginDefinition    @relation(fields: [pluginId], references: [id])
+
+  @@unique([tenantId, pluginId])
+  @@map("purchased_plugins")
 }
 
 // ===== 合同文件夹 =====
