@@ -40,7 +40,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = React.useState(false);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
   const [showNewTenantDialog, setShowNewTenantDialog] = React.useState(false);
-  const [newTenantType, setNewTenantType] = React.useState<'PERSONAL' | 'ENTERPRISE'>('PERSONAL');
+  const [newTenantType, setNewTenantType] = React.useState<'PERSONAL' | 'INDIVIDUAL' | 'ENTERPRISE'>('PERSONAL');
   const [newTenantName, setNewTenantName] = React.useState('');
   const [creatingTenant, setCreatingTenant] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -315,6 +315,15 @@ export default function SettingsPage() {
                         <Home className="h-5 w-5 mx-auto mb-1" />
                         <p className="text-sm font-medium">个人账号</p>
                         <p className="text-xs text-muted-foreground">个人使用</p>
+                      </button>
+                      <button
+                        type="button"
+                        className={`flex-1 p-3 rounded-lg border-2 text-center ${newTenantType === 'INDIVIDUAL' ? 'border-primary bg-primary/5' : 'border-muted'}`}
+                        onClick={() => setNewTenantType('INDIVIDUAL')}
+                      >
+                        <Store className="h-5 w-5 mx-auto mb-1" />
+                        <p className="text-sm font-medium">个体工商户</p>
+                        <p className="text-xs text-muted-foreground">个体经营使用</p>
                       </button>
                       <button
                         type="button"

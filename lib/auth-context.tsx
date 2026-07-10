@@ -233,7 +233,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (target) {
       saveTenantToStorage(target);
       setTenant(target);
-      router.push('/dashboard');
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/dashboard';
+      router.replace(currentPath);
     }
   };
 

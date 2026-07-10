@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Search, Building2, BadgeCheck, UtensilsCrossed,
   CheckCircle, Stamp, History, Camera, Mail, Wand2, Store, DollarSign, LogOut, Sparkles, Loader2, X, Shield,
+  Home, Users,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
@@ -55,7 +56,7 @@ const ALL_ITEMS: SidebarItem[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { tenant, user, logout } = useAuth();
+  const { tenant, user, logout, tenantList, switchTenant } = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const isDev = process.env.NODE_ENV === 'development';
   const isEnterprise = tenant?.sceneType === 'ENTERPRISE';
@@ -195,11 +196,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {userMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
-                    <div className="absolute right-0 top-10 w-56 rounded-xl border bg-popover p-1 shadow-xl z-50">
+                    <div className="absolute right-0 top-10 w-64 rounded-xl border bg-popover p-1 shadow-xl z-50">
                       <div className="px-3 py-2 border-b">
                         <p className="text-sm font-medium">{user?.name || '用户'}</p>
                         <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
                       </div>
+
+                      {/* 当前账号信息 + 快捷切换 */}
+                      <div className="py-1 border-b">
+                        <p className="px-3 py-1 text-xs text-muted-foreground font-medium">当前主体</p>
+                        {tenant && (
+                          <div className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                            {tenant.sceneType === 'PERSONAL' ? <Home className="h-4 w-4" /> :
+                             tenant.sceneType === 'INDIVIDUAL' ? <Store className="h-4 w-4" /> :
+                             <Building2 className="h-4 w-4" />}
+                            <span className="font-medium truncate">{tenant.tenantName}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {tenant.sceneType === 'PERSONAL' ? '个人' :
+                               tenant.sceneType === 'INDIVIDUAL' ? '个体户' : '企业'}
+                            </span>
+                          </div>
+                        )}
+                        {/* 快捷切换其他主体 */}
+                        {tenantList.filter(t => t.tenantId !== tenant?.tenantId).slice(0, 3).map(t => (
+                          <button key={t.tenantId} onClick={() => { setUserMenuOpen(false); switchTenant(t.tenantId); }}
+                            className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg hover:bg-accent w-full text-left">
+                            {t.sceneType === 'PERSONAL' ? <Home className="h-4 w-4" /> :
+                             t.sceneType === 'INDIVIDUAL' ? <Store className="h-4 w-4" /> :
+                             <Building2 className="h-4 w-4" />}
+                            <span className="truncate">{t.tenantName}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">切换</span>
+                          </button>
+                        ))}
+                        {tenantList.length > 4 && (
+                          <Link href="/dashboard/settings" onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs text-primary rounded-lg hover:bg-accent">
+                            <Users className="h-3 w-3" />查看全部 {tenantList.length} 个主体
+                          </Link>
+                        )}
+                      </div>
+
                       <div className="py-1">
                         <Link href="/dashboard/settings" className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-accent"
                           onClick={() => setUserMenuOpen(false)}>
