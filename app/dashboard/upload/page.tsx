@@ -34,6 +34,24 @@ interface FileItem {
 const ACCEPTED_TYPES = '.pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.bmp,.webp';
 const CONTRACT_TYPES = ['买卖合同', '租赁合同', '劳动合同', '服务合同', '借款合同', '承揽合同', '技术合同', '保密协议', '合伙协议', '其他'];
 
+interface SummaryFields {
+  name: string; partyA: string; partyB: string; amount: string; amountText: string;
+  signDate: string; startDate: string; endDate: string; contractType: string; paymentMethod: string;
+}
+
+const SUMMARY_FIELD_DEFS: { key: keyof SummaryFields; label: string }[] = [
+  { key: 'name', label: '合同名称' },
+  { key: 'partyA', label: '甲方' },
+  { key: 'partyB', label: '乙方' },
+  { key: 'amount', label: '合同金额（小写）' },
+  { key: 'amountText', label: '合同金额（大写）' },
+  { key: 'signDate', label: '签订日期' },
+  { key: 'startDate', label: '生效日期' },
+  { key: 'endDate', label: '到期日期' },
+  { key: 'contractType', label: '合同类型' },
+  { key: 'paymentMethod', label: '付款方式' },
+];
+
 async function callAIParse(fileName: string, text: string): Promise<AIParseResult> {
   const res = await fetch('/api/ai/parse-contract', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -70,6 +88,17 @@ export default function UploadContractPage() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [fullscreenFile, setFullscreenFile] = React.useState<FileItem | null>(null);
+  const [extractingSummaries, setExtractingSummaries] = React.useState<Record<string, boolean>>({});
+  const [summaryFieldsMap, setSummaryFieldsMap] = React.useState<Record<string, SummaryFields>>({});
+
+  // 文件进入 review 状态时自动触发 AI 摘要提取
+  React.useEffect(() => {
+    const reviewFile = files.find((f) => f.status === 'review' && !summaryFieldsMap[f.id] && !extractingSummaries[f.id]);
+    if (reviewFile) {
+      handleAISummary(reviewFile.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, summaryFieldsMap, extractingSummaries]);
 
   const addFiles = async (newFiles: File[]) => {
     const valid = newFiles.filter((f) => {
@@ -124,6 +153,50 @@ export default function UploadContractPage() {
 
   const updateField = (fileId: string, field: string, value: any) => {
     setFiles((prev) => prev.map((f) => f.id === fileId ? { ...f, confirmedData: { ...(f.confirmedData || f.parseResult), [field]: value } as any } : f));
+  };
+
+  const handleAISummary = async (fileId: string) => {
+    const file = files.find((f) => f.id === fileId);
+    if (!file || !file.text) return;
+    setExtractingSummaries((prev) => ({ ...prev, [fileId]: true }));
+    try {
+      const res = await fetch('/api/ai/analyze-contract', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: file.text, type: 'contract_summary' }),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.fields) {
+        setSummaryFieldsMap((prev) => ({ ...prev, [fileId]: data.data.fields }));
+      }
+    } catch {
+      console.error('AI摘要提取失败');
+    }
+    setExtractingSummaries((prev) => ({ ...prev, [fileId]: false }));
+  };
+
+  const updateSummaryField = (fileId: string, key: keyof SummaryFields, value: string) => {
+    setSummaryFieldsMap((prev) => {
+      const existing = prev[fileId] || { name: '', partyA: '', partyB: '', amount: '', amountText: '', signDate: '', startDate: '', endDate: '', contractType: '', paymentMethod: '' };
+      return { ...prev, [fileId]: { ...existing, [key]: value } };
+    });
+  };
+
+  const handleConfirmSummaryAndSave = async (fileId: string) => {
+    // 将摘要信息同步到 confirmedData
+    const file = files.find((f) => f.id === fileId);
+    if (!file) return;
+    const summary = summaryFieldsMap[fileId];
+    if (summary) {
+      updateField(fileId, 'contractName', summary.name);
+      updateField(fileId, 'partyA', summary.partyA);
+      updateField(fileId, 'partyB', summary.partyB);
+      updateField(fileId, 'contractType', summary.contractType);
+      if (summary.amount) updateField(fileId, 'amount', Number(summary.amount));
+      updateField(fileId, 'amountText', summary.amountText);
+      if (summary.startDate) updateField(fileId, 'startDate', summary.startDate);
+      if (summary.endDate) updateField(fileId, 'endDate', summary.endDate);
+    }
+    await handleArchive(fileId);
   };
 
   const handleArchive = async (fileId: string) => {
@@ -194,14 +267,14 @@ export default function UploadContractPage() {
     switch (previewType) {
       case 'image':
         return file.previewUrl ? (
-          <img src={file.previewUrl} alt="" className="w-full object-contain min-h-[300px] max-h-[55vh] cursor-pointer rounded border bg-muted/10"
+          <img src={file.previewUrl} alt="" className="w-full object-contain min-h-[400px] max-h-[60vh] cursor-pointer rounded border bg-muted/10"
             onClick={() => setFullscreenFile(file)} />
         ) : null;
 
       case 'pdf':
         return file.pdfUrl ? (
           <div className="relative">
-            <iframe src={file.pdfUrl} className="w-full min-h-[300px] h-[55vh] rounded border" title="PDF预览" />
+            <iframe src={file.pdfUrl} className="w-full min-h-[400px] h-[60vh] rounded border" title="PDF预览" />
             <div className="absolute top-2 right-2 flex gap-1">
               <button onClick={() => setFullscreenFile(file)}
                 className="bg-background/90 rounded-md px-2 py-1 text-xs shadow-sm hover:bg-background flex items-center gap-1">
@@ -225,7 +298,7 @@ export default function UploadContractPage() {
 
       case 'docx':
         return file.docxHtml ? (
-          <div className="border rounded-lg p-4 min-h-[300px] max-h-[55vh] overflow-y-auto bg-white text-sm"
+          <div className="border rounded-lg p-4 min-h-[400px] max-h-[60vh] overflow-y-auto bg-white text-sm"
             dangerouslySetInnerHTML={{ __html: file.docxHtml }} />
         ) : (
           <div className="border rounded-lg p-8 text-center bg-muted/20">
@@ -420,6 +493,39 @@ export default function UploadContractPage() {
                       <Button size="sm" className="w-full" onClick={() => handleArchive(file.id)}>
                         <Save className="h-4 w-4 mr-1" />确认归档
                       </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* AI 提取摘要面板 */}
+              {file.status === 'review' && file.confirmedData && (
+                <div className="p-4 border-t">
+                  <div className="rounded-lg border bg-card p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-medium flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" /> AI 提取的合同信息
+                      </h3>
+                      <Button variant="outline" size="sm" onClick={() => handleAISummary(file.id)} disabled={extractingSummaries[file.id]}>
+                        {extractingSummaries[file.id] ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                        重新提取
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {SUMMARY_FIELD_DEFS.map((field) => {
+                        const val = summaryFieldsMap[file.id]?.[field.key] || '';
+                        return (
+                          <div key={field.key} className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">{field.label}</Label>
+                            <Input value={val} onChange={(e) => updateSummaryField(file.id, field.key, e.target.value)}
+                              placeholder="等待识别..." className="text-sm" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <Button onClick={() => handleConfirmSummaryAndSave(file.id)}>确认并归档</Button>
+                      <Button variant="outline" onClick={() => handleAISummary(file.id)}>重新提取</Button>
                     </div>
                   </div>
                 </div>

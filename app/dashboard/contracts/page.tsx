@@ -32,6 +32,14 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
   expired: { label: '已过期', variant: 'destructive' },
 };
 
+const MOCK_CATEGORIES = [
+  { id: 'f1', name: '采购合同', count: 5 },
+  { id: 'f2', name: '租赁合同', count: 3 },
+  { id: 'f3', name: '劳动合同', count: 8 },
+  { id: 'f4', name: '技术服务', count: 2 },
+  { id: 'f5', name: '品牌授权', count: 1 },
+];
+
 export default function ContractsPage() {
   const { tenant } = useAuth();
   const effectiveTenantId = tenant?.tenantId || 'default';
@@ -40,6 +48,8 @@ export default function ContractsPage() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
+  const [activeCategory, setActiveCategory] = React.useState('all');
+  const categories = MOCK_CATEGORIES;
   const [sortBy, setSortBy] = React.useState<'endDate' | 'amount'>('endDate');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
@@ -80,6 +90,8 @@ export default function ContractsPage() {
   // 过滤 + 排序
   const filtered = contracts
     .filter((c) => {
+      // 分类筛选
+      if (activeCategory !== 'all' && (c as any).folderId !== activeCategory) return false;
       // 关键词搜索
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -351,6 +363,28 @@ export default function ContractsPage() {
           )}
         </div>
       </CardContent></Card>
+
+      {/* 分类标签栏 */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <button
+          onClick={() => setActiveCategory('all')}
+          className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            activeCategory === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+          }`}
+        >全部合同</button>
+        {categories.map(cat => (
+          <button
+            key={cat.id}
+            onClick={() => setActiveCategory(cat.id)}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              activeCategory === cat.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            {cat.name}
+            <span className="ml-1 text-xs opacity-70">({cat.count})</span>
+          </button>
+        ))}
+      </div>
 
       {/* 批量操作栏 */}
       {selectedIds.size > 0 && (

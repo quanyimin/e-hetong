@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Camera, Upload, RotateCcw, Check, AlertCircle, Loader2, FileText, Scan } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Camera, Upload, RotateCcw, Check, AlertCircle, Loader2, FileText, Scan, BadgeCheck } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function CameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -17,8 +20,20 @@ export default function CameraPage() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'processing' | 'done' | 'error'>('idle');
   const [uploading, setUploading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<'contract' | 'license'>('contract');
   const [error, setError] = useState<string | null>(null);
+  const { tenant } = useAuth();
+  const tenantId = tenant?.tenantId || 'default';
   const router = useRouter();
+
+  // 证照表单
+  const [licenseForm, setLicenseForm] = useState({
+    name: '',
+    type: '营业执照',
+    issuingAuthority: '',
+    validUntil: '',
+    licenseNumber: '',
+  });
 
   // 启动摄像头
   async function startCamera() {
@@ -142,46 +157,72 @@ export default function CameraPage() {
     setUploading(true);
     setError(null);
     try {
-      // 第一步：创建合同记录（含 OCR 文本）
-      const contractRes = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: '拍照合同' + new Date().toLocaleDateString('zh-CN'),
-          ocrText: ocrText,
-          source: 'CAMERA_OCR',
-          fileUrl: capturedImage,
-        }),
-      });
-
-      if (!contractRes.ok) {
-        const errData = await contractRes.json();
-        throw new Error(errData.message || errData.error || '创建合同失败');
-      }
-
-      const contractResult = await contractRes.json();
-      const contractId = contractResult.data?.id;
-
-      if (!contractId) {
-        throw new Error('创建合同失败：未返回合同ID');
-      }
-
-      // 第二步：触发 AI 解析（传入 OCR 文本）
-      if (ocrText && ocrText.trim().length >= 10) {
-        await fetch('/api/ai/parse-contract', {
+      if (archiveTarget === 'license') {
+        // 归档到证照管理
+        const licenseRes = await fetch(`/api/licenses?tenantId=${encodeURIComponent(tenantId)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contractId: contractId,
+            name: licenseForm.name || '拍照证照' + new Date().toLocaleDateString('zh-CN'),
+            type: licenseForm.type,
+            issuingAuthority: licenseForm.issuingAuthority,
+            validUntil: licenseForm.validUntil,
+            licenseNumber: licenseForm.licenseNumber,
+            attachmentUrl: capturedImage,
+            files: JSON.stringify([capturedImage]),
             ocrText: ocrText,
-            text: ocrText,
-            fileName: '拍照合同',
           }),
         });
-      }
 
-      // 跳转到合同详情
-      router.push(`/dashboard/contracts/${contractId}`);
+        if (!licenseRes.ok) {
+          const errData = await licenseRes.json();
+          throw new Error(errData.message || errData.error || '创建证照失败');
+        }
+
+        // 跳转到证照列表
+        router.push('/dashboard/licenses');
+      } else {
+        // 归档到合同管理
+        const contractRes = await fetch(`/api/contracts?tenantId=${encodeURIComponent(tenantId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: '拍照合同' + new Date().toLocaleDateString('zh-CN'),
+            ocrText: ocrText,
+            source: 'CAMERA_OCR',
+            fileUrl: capturedImage,
+          }),
+        });
+
+        if (!contractRes.ok) {
+          const errData = await contractRes.json();
+          throw new Error(errData.message || errData.error || '创建合同失败');
+        }
+
+        const contractResult = await contractRes.json();
+        const contractId = contractResult.data?.id;
+
+        if (!contractId) {
+          throw new Error('创建合同失败：未返回合同ID');
+        }
+
+        // 第二步：触发 AI 解析（传入 OCR 文本）
+        if (ocrText && ocrText.trim().length >= 10) {
+          await fetch(`/api/ai/parse-contract?tenantId=${encodeURIComponent(tenantId)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractId: contractId,
+              ocrText: ocrText,
+              text: ocrText,
+              fileName: '拍照合同',
+            }),
+          });
+        }
+
+        // 跳转到合同详情
+        router.push(`/dashboard/contracts/${contractId}`);
+      }
     } catch (e: any) {
       setError(e.message || '上传失败，请重试');
     }
@@ -264,18 +305,83 @@ export default function CameraPage() {
 
               {/* OCR 结果 */}
               {ocrStatus === 'done' && ocrText && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-green-700">
-                    <Check className="h-4 w-4" />
-                    已识别文字 ({ocrText.length}字符)
+                <div className="space-y-4">
+                  {/* 归档选择 */}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <h3 className="text-sm font-medium mb-3">归档到：</h3>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setArchiveTarget('contract')}
+                        className={`flex-1 p-3 rounded-lg border-2 text-center transition-colors ${
+                          archiveTarget === 'contract' ? 'border-primary bg-primary/5' : 'border-muted'
+                        }`}
+                      >
+                        <FileText className="h-5 w-5 mx-auto mb-1" />
+                        <p className="text-xs font-medium">合同管理</p>
+                      </button>
+                      <button
+                        onClick={() => setArchiveTarget('license')}
+                        className={`flex-1 p-3 rounded-lg border-2 text-center transition-colors ${
+                          archiveTarget === 'license' ? 'border-primary bg-primary/5' : 'border-muted'
+                        }`}
+                      >
+                        <BadgeCheck className="h-5 w-5 mx-auto mb-1" />
+                        <p className="text-xs font-medium">证照管理</p>
+                      </button>
+                    </div>
                   </div>
-                  <textarea
-                    className="w-full h-24 p-2 text-xs border rounded-lg bg-muted/30 resize-none"
-                    value={ocrText}
-                    onChange={e => setOcrText(e.target.value)}
-                    placeholder="OCR识别结果可在此编辑修正..."
-                  />
-                  <p className="text-xs text-muted-foreground">可手动修正识别结果，AI将根据修正后的文字解析</p>
+
+                  {/* 证照表单（归档到证照时显示） */}
+                  {archiveTarget === 'license' && (
+                    <div className="space-y-3 p-3 rounded-lg border">
+                      <h3 className="text-sm font-medium">证照信息</h3>
+                      <div className="grid grid-cols-1 gap-2">
+                        <div>
+                          <Label className="text-xs">证照名称</Label>
+                          <Input value={licenseForm.name} onChange={e => setLicenseForm(f => ({ ...f, name: e.target.value }))}
+                            placeholder="输入证照名称" className="h-9 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">证照类型</Label>
+                          <select value={licenseForm.type} onChange={e => setLicenseForm(f => ({ ...f, type: e.target.value }))}
+                            className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm">
+                            <option>营业执照</option>
+                            <option>身份证</option>
+                            <option>资质证书</option>
+                            <option>许可证</option>
+                            <option>其他</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">发证机关</Label>
+                          <Input value={licenseForm.issuingAuthority} onChange={e => setLicenseForm(f => ({ ...f, issuingAuthority: e.target.value }))}
+                            placeholder="发证机关" className="h-9 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">有效期至</Label>
+                          <Input type="date" value={licenseForm.validUntil} onChange={e => setLicenseForm(f => ({ ...f, validUntil: e.target.value }))}
+                            className="h-9 text-sm" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">证照编号</Label>
+                          <Input value={licenseForm.licenseNumber} onChange={e => setLicenseForm(f => ({ ...f, licenseNumber: e.target.value }))}
+                            placeholder="证照编号" className="h-9 text-sm" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OCR 文本显示 */}
+                  <div className="p-3 rounded-lg bg-muted/20 border">
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs text-muted-foreground">OCR 识别原文</Label>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigator.clipboard.writeText(ocrText)}>
+                        复制
+                      </Button>
+                    </div>
+                    <textarea className="w-full text-xs text-muted-foreground bg-transparent border-0 resize-none focus:outline-none"
+                      rows={4} value={ocrText} onChange={e => setOcrText(e.target.value)} />
+                  </div>
                 </div>
               )}
 
@@ -290,9 +396,9 @@ export default function CameraPage() {
                 <Button onClick={retake} variant="outline" disabled={uploading} className="gap-2">
                   <RotateCcw className="h-4 w-4" /> 重拍
                 </Button>
-                <Button onClick={uploadAndParse} disabled={uploading} size="lg" className="gap-2">
+                <Button onClick={uploadAndParse} disabled={uploading || ocrStatus !== 'done'} size="lg" className="gap-2">
                   {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
-                  {uploading ? '上传解析中...' : '确认上传并解析'}
+                  {uploading ? '上传解析中...' : archiveTarget === 'license' ? '确认归档至证照' : '确认上传并解析'}
                 </Button>
               </div>
             </div>
