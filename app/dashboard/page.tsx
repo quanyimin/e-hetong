@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>({});
   const [recentContracts, setRecentContracts] = useState<any[]>([]);
   const [billsDue, setBillsDue] = useState<any[]>([]);
+  const [upcomingItems, setUpcomingItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,10 +44,12 @@ export default function DashboardPage() {
       fetch('/api/dashboard/stats').then(r => r.json()),
       fetch('/api/contracts?limit=5').then(r => r.json()),
       fetch('/api/bills?status=PENDING').then(r => r.json()),
-    ]).then(([statsData, contractsData, billsData]) => {
+      fetch('/api/upcoming').then(r => r.json()),
+    ]).then(([statsData, contractsData, billsData, upcomingData]) => {
       setStats(statsData.stats || statsData || {});
       setRecentContracts(contractsData.data || contractsData.contracts || []);
       setBillsDue(billsData.bills || []);
+      setUpcomingItems(upcomingData.items || []);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
@@ -99,6 +102,33 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 到期日历 */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-base">到期日历</CardTitle></CardHeader>
+        <CardContent>
+          {upcomingItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">近期无到期项目</p>
+          ) : (
+            <div className="space-y-2">
+              {upcomingItems.slice(0, 8).map((item: any) => (
+                <div key={item.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-xs font-bold shrink-0">
+                    {new Date(item.date).getDate()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">{item.description}</p>
+                  </div>
+                  <Badge variant={item.daysLeft <= 1 ? 'destructive' : item.daysLeft <= 7 ? 'default' : 'outline'}>
+                    {item.daysLeft <= 0 ? '已过期' : `${item.daysLeft}天`}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 行业插件看板 */}
       <div>

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Folder, Search, Building2, BadgeCheck, UtensilsCrossed,
-  CheckCircle, Stamp, History, Camera, Mail, Wand2, Store,
+  CheckCircle, Stamp, History, Camera, Mail, Wand2, Store, DollarSign,
 } from 'lucide-react';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { TenantSwitcher } from '@/components/TenantSwitcher';
@@ -23,6 +23,7 @@ interface SidebarItem {
 
 const ALL_ITEMS: SidebarItem[] = [
   { href: '/dashboard', label: '概览', icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/finance', label: '财务看板', icon: DollarSign, enterpriseOnly: true },
   { href: '/dashboard/contracts', label: '合同管理', icon: FileText },
   { href: '/dashboard/contracts/generate', label: 'AI生成合同', icon: Wand2 },
   { href: '/dashboard/folders', label: '合同分类', icon: Folder },
