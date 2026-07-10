@@ -114,6 +114,9 @@ model Tenant {
   industryVersion IndustryVersion? @relation(fields: [industryVersionId], references: [id])
   departments   Department[]
   approvals     Approval[]
+  seals         Seal[]
+  sealRequests  SealRequest[]
+  rolePermissions RolePermission[]
   auditLogs     AuditLog[]
   contracts     Contract[]
 
@@ -394,6 +397,7 @@ model Reminder {
   id         String    @id @default(cuid())
   contractId String?   @map("contract_id")
   billId     String?   @map("bill_id")
+  licenseId  String?   @map("license_id")
   userId     String    @map("user_id")
   tenantId   String?   @map("tenant_id")
   remindAt   DateTime  @map("remind_at")
@@ -405,12 +409,14 @@ model Reminder {
   createdAt  DateTime  @default(now()) @map("created_at")
 
   contract Contract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  license  License?  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([remindAt])
   @@index([sendStatus])
   @@index([tenantId])
+  @@index([licenseId])
   @@map("reminders")
 }
 
@@ -460,7 +466,8 @@ model License {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reminders Reminder[]
 
   @@index([userId])
   @@index([type])
@@ -530,6 +537,60 @@ model Approval {
   @@index([tenantId])
   @@index([status])
   @@map("approvals")
+}
+
+// ===== 印章 =====
+model Seal {
+  id          String    @id @default(cuid())
+  tenantId    String    @map("tenant_id")
+  name        String
+  status      String    @default("ACTIVE") // ACTIVE | DISABLED
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("seals")
+}
+
+// ===== 用印申请 =====
+model SealRequest {
+  id           String    @id @default(cuid())
+  tenantId     String    @map("tenant_id")
+  sealId       String    @map("seal_id")
+  applicantId  String    @map("applicant_id")
+  purpose      String
+  contractRef  String?   @map("contract_ref")
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  comment      String?
+  submittedAt  DateTime  @default(now()) @map("submitted_at")
+  processedAt  DateTime? @map("processed_at")
+  processedBy  String?   @map("processed_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([sealId])
+  @@map("seal_requests")
+}
+
+// ===== 角色权限配置 =====
+model RolePermission {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  role      String   // ADMIN | EDITOR | VIEWER
+  module    String   // CONTRACT | LICENSE | APPROVAL
+  actions   String   // JSON array, e.g. ["VIEW","CREATE"]
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, role, module])
+  @@map("role_permissions")
 }
 
 // ===== 审计日志 =====

@@ -32,14 +32,6 @@ const STATUS_CONFIG: Record<string, { label: string; variant: 'success' | 'warni
   expired: { label: '已过期', variant: 'destructive' },
 };
 
-const MOCK_CATEGORIES = [
-  { id: 'f1', name: '采购合同', count: 5 },
-  { id: 'f2', name: '租赁合同', count: 3 },
-  { id: 'f3', name: '劳动合同', count: 8 },
-  { id: 'f4', name: '技术服务', count: 2 },
-  { id: 'f5', name: '品牌授权', count: 1 },
-];
-
 export default function ContractsPage() {
   const { tenant } = useAuth();
   const effectiveTenantId = tenant?.tenantId || 'default';
@@ -49,7 +41,19 @@ export default function ContractsPage() {
   const [typeFilter, setTypeFilter] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState('all');
-  const categories = MOCK_CATEGORIES;
+  // 分类标签：从合同数据中按 type 聚合生成
+  const categories = React.useMemo(() => {
+    const map = new Map<string, number>();
+    contracts.forEach(c => {
+      const key = c.type || 'other';
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return Array.from(map.entries()).map(([id, count]) => ({
+      id,
+      name: TYPE_LABELS[id] || id,
+      count,
+    }));
+  }, [contracts]);
   const [sortBy, setSortBy] = React.useState<'endDate' | 'amount'>('endDate');
   const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('asc');
   const [showDeleteModal, setShowDeleteModal] = React.useState(false);
@@ -90,8 +94,8 @@ export default function ContractsPage() {
   // 过滤 + 排序
   const filtered = contracts
     .filter((c) => {
-      // 分类筛选
-      if (activeCategory !== 'all' && (c as any).folderId !== activeCategory) return false;
+      // 分类筛选（按合同类型 type 匹配）
+      if (activeCategory !== 'all' && c.type !== activeCategory) return false;
       // 关键词搜索
       if (searchQuery) {
         const q = searchQuery.toLowerCase();

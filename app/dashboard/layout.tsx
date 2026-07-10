@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, Bell, Settings, Upload, ChevronLeft, Gift, Search, Building2, BadgeCheck, UtensilsCrossed,
-  CheckCircle, Stamp, History, Camera, Mail, Wand2, Store, DollarSign, LogOut, Sparkles, Loader2, X,
+  CheckCircle, Stamp, History, Camera, Mail, Wand2, Store, DollarSign, LogOut, Sparkles, Loader2, X, Shield,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
@@ -48,6 +48,7 @@ const ALL_ITEMS: SidebarItem[] = [
   { href: '/dashboard/enterprise/approval', label: '审批管理', icon: CheckCircle, enterpriseOnly: true },
   { href: '/dashboard/enterprise/seals', label: '用印管理', icon: Stamp, enterpriseOnly: true },
   { href: '/dashboard/enterprise/audit', label: '审计日志', icon: History, enterpriseOnly: true },
+  { href: '/dashboard/enterprise/roles', label: '角色权限', icon: Shield, enterpriseOnly: true },
   { href: '/dashboard/distribution', label: '分销中心', icon: Gift, distributorOnly: true },
   { href: '/dashboard/settings', label: '设置', icon: Settings },
 ];

@@ -18,6 +18,7 @@ export default function EmailImportPage() {
   const [fetching, setFetching] = useState(false);
   const [emails, setEmails] = useState<any[]>([]);
   const [importHistory, setImportHistory] = useState<any[]>([]);
+  const [importingId, setImportingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // 表单状态
@@ -72,7 +73,7 @@ export default function EmailImportPage() {
       const data = await res.json();
       if (data.success) {
         setEmails(data.emails || []);
-        setMessage({ type: 'success', text: `找到 ${data.total} 封含附件的邮件` });
+        setMessage({ type: 'success', text: `找到 ${data.total} 封邮件` });
         setTab('inbox');
       } else {
         setMessage({ type: 'error', text: data.error || '抓取失败' });
@@ -81,6 +82,39 @@ export default function EmailImportPage() {
       setMessage({ type: 'error', text: '抓取失败，请重试' });
     }
     setFetching(false);
+  }
+
+  async function handleImportAsContract(email: any) {
+    const key = email.reminderId || email.messageId;
+    setImportingId(key);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/email/import-as-contract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: email.subject,
+          ocrText: email.ocrText || '',
+          from: email.from,
+          date: email.date,
+          attachments: email.attachments,
+          reminderId: email.reminderId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: `「${email.subject}」已导入为合同` });
+        // 刷新导入历史
+        fetch('/api/email/fetch').then(r => r.json()).then(d => {
+          setImportHistory(d.imports || []);
+        }).catch(() => {});
+      } else {
+        setMessage({ type: 'error', text: data.error || '导入失败' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: '导入失败，请重试' });
+    }
+    setImportingId(null);
   }
 
   return (
@@ -153,8 +187,19 @@ export default function EmailImportPage() {
                           ))}
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="gap-1">
-                        导入 <ChevronRight className="h-3 w-3" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 shrink-0"
+                        onClick={() => handleImportAsContract(email)}
+                        disabled={importingId === (email.reminderId || email.messageId)}
+                      >
+                        {importingId === (email.reminderId || email.messageId) ? (
+                          <RefreshCw className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <FileText className="h-3 w-3" />
+                        )}
+                        {importingId === (email.reminderId || email.messageId) ? '导入中...' : '导入合同'}
                       </Button>
                     </div>
                   </CardContent>
