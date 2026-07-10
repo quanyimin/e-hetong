@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation';
 export interface AuthUser {
   id: string;
   name: string;
+  realName?: string | null;
+  realNameVerified?: boolean;
   email: string | null;
   phone: string | null;
   role: string;
@@ -18,8 +20,11 @@ export interface TenantInfo {
   tenantName: string;
   role: string;
   sceneType: string;
+  type?: string;
   /** 身份类型 PERSONAL | ENTERPRISE（从场景类型自动推导） */
   identityType: string;
+  /** 企业实名认证状态 */
+  companyVerified?: boolean;
 }
 
 interface AuthContextType {
@@ -93,9 +98,13 @@ function saveUserToStorage(user: AuthUser | null) {
     if (user) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
       setCookie(COOKIE_NAME, JSON.stringify(user));
+      setCookie('ehetong_userId', user.id);
+      setCookie('ehetong_userRole', user.role || 'user');
     } else {
       localStorage.removeItem(STORAGE_KEY);
       setCookie(COOKIE_NAME, null);
+      setCookie('ehetong_userId', null);
+      setCookie('ehetong_userRole', null);
     }
   } catch { /* ignore */ }
 }
@@ -110,7 +119,7 @@ function saveTenantToStorage(tenant: TenantInfo | null) {
       setCookie('ehetong_orgId', tenant.tenantId);
       setCookie('ehetong_userId', (() => {
         try {
-          const u = localStorage.getItem('ehetong_user');
+          const u = localStorage.getItem(STORAGE_KEY);
           return u ? JSON.parse(u).id : '';
         } catch { return ''; }
       })());
@@ -119,6 +128,7 @@ function saveTenantToStorage(tenant: TenantInfo | null) {
       setCookie(TENANT_COOKIE_NAME, null);
       setCookie('ehetong_identityType', null);
       setCookie('ehetong_orgId', null);
+      setCookie('ehetong_userId', null);
     }
   } catch { /* ignore */ }
 }

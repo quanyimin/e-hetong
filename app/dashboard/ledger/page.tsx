@@ -2,443 +2,334 @@
 
 import * as React from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { DollarSign, CreditCard, ArrowUpRight, ArrowDownRight, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Clock, Search, Inbox } from 'lucide-react';
-
-interface BillItem {
-  id: string;
-  title: string;
-  amount: number;
-  paidAmount: number;
-  dueDate: string;
-  status: string;
-  lateFee: number | null;
-}
-
-interface ContractLedger {
-  id: string;
-  name: string;
-  financialType: string;
-  amount: number;
-  paidAmount: number;
-  pendingAmount: number;
-  partnerName: string;
-  bills: BillItem[];
-}
-
-interface MonthlyLedger {
-  month: string;
-  incomeAmount: number;
-  expenseAmount: number;
-  incomePaid: number;
-  expensePaid: number;
-  incomePending: number;
-  expensePending: number;
-  contractCount: number;
-}
+import { Button } from '@/components/ui/button';
+import {
+  Wallet, FileText, Calendar, Loader2, ArrowUpRight, ArrowDownRight,
+} from 'lucide-react';
 
 interface LedgerData {
-  summary: {
-    totalIncome: number;
-    totalExpense: number;
-    paidIncome: number;
-    paidExpense: number;
-    pendingIncome: number;
-    pendingExpense: number;
+  summary: { total: number; totalAmount: number };
+  monthly: { income: number; expense: number; net: number };
+  yearly: { income: number; expense: number; net: number };
+  typeDistribution: { type: string; count: number; amount: number }[];
+  statusDistribution: { status: string; count: number }[];
+  expiring: {
+    days7: any[];
+    days15: any[];
+    days30: any[];
   };
-  monthly: MonthlyLedger[];
-  contracts: ContractLedger[];
+  trend: { month: string; income: number; expense: number }[];
 }
 
-const STATUS_BADGE: Record<string, { label: string; color: string; icon: any }> = {
-  PAID: { label: '已付', color: 'text-green-600 bg-green-50 border-green-200', icon: CheckCircle2 },
-  PENDING: { label: '待付', color: 'text-yellow-600 bg-yellow-50 border-yellow-200', icon: Clock },
-  OVERDUE: { label: '逾期', color: 'text-red-600 bg-red-50 border-red-200', icon: AlertCircle },
+const TYPE_LABELS: Record<string, string> = {
+  sale: '销售合同',
+  lease: '租赁合同',
+  labor: '劳动合同',
+  service: '服务合同',
+  loan: '借款合同',
+  nda: '保密协议',
+  other: '其他',
 };
 
-function formatMoney(val: number) {
-  return `¥${val.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: '草稿',
+  SIGNING: '签署中',
+  ACTIVE: '生效中',
+  CLOSED: '已完结',
+  TERMINATED: '已终止',
+  ARCHIVED: '已归档',
+};
+
+function formatCurrency(n: number) {
+  if (n >= 100000000) return `¥${(n / 100000000).toFixed(2)}亿`;
+  if (n >= 10000) return `¥${(n / 10000).toFixed(1)}万`;
+  return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function formatDate(d: string | Date) {
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function daysUntil(dateStr: string) {
+  const now = new Date();
+  const end = new Date(dateStr);
+  return Math.ceil((end.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 export default function LedgerPage() {
-  const { tenant } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = React.useState<LedgerData | null>(null);
   const [loading, setLoading] = React.useState(true);
-  const [viewType, setViewType] = React.useState<'all' | 'income' | 'expense'>('all');
-  const [expandedContracts, setExpandedContracts] = React.useState<Set<string>>(new Set());
-  const [expandedMonths, setExpandedMonths] = React.useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<string>('all');
+  const [error, setError] = React.useState<string | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'month' | 'year'>('month');
+  const [expiringTab, setExpiringTab] = React.useState<7 | 15 | 30>(7);
+
+  const loadData = React.useCallback(() => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    fetch('/api/contracts/ledger')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success) {
+          setData(json.data);
+        } else {
+          setError(json.error || json.message || '加载失败');
+        }
+      })
+      .catch(e => setError(e.message || '网络错误'))
+      .finally(() => setLoading(false));
+  }, [user]);
 
   React.useEffect(() => {
-    if (!tenant?.tenantId) return;
-    setLoading(true);
-    const ft = viewType === 'all' ? '' : viewType;
-    fetch(`/api/ledger?tenantId=${tenant.tenantId}&financialType=${ft}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.code === 0) setData(res.data);
-      })
-      .finally(() => setLoading(false));
-  }, [tenant?.tenantId, viewType]);
-
-  // 本地过滤：按合同名称搜索 + 按账单状态筛选
-  const filteredContracts = React.useMemo(() => {
-    if (!data) return [];
-    let contracts = data.contracts;
-
-    // 按合同名称搜索
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      contracts = contracts.filter((c) => c.name.toLowerCase().includes(q));
-    }
-
-    // 按账单状态筛选
-    if (statusFilter !== 'all') {
-      contracts = contracts
-        .map((c) => ({
-          ...c,
-          bills: c.bills.filter((b) => b.status === statusFilter),
-        }))
-        .filter((c) => c.bills.length > 0);
-    }
-
-    return contracts;
-  }, [data, searchQuery, statusFilter]);
-
-  // 基于过滤后的数据重新计算汇总统计
-  const filteredSummary = React.useMemo(() => {
-    let totalIncome = 0, totalExpense = 0;
-    let paidIncome = 0, paidExpense = 0;
-
-    for (const c of filteredContracts) {
-      for (const b of c.bills) {
-        if (c.financialType === 'INCOME') {
-          totalIncome += b.amount;
-          paidIncome += b.paidAmount;
-        } else {
-          totalExpense += b.amount;
-          paidExpense += b.paidAmount;
-        }
-      }
-    }
-
-    return {
-      totalIncome,
-      totalExpense,
-      paidIncome,
-      paidExpense,
-      pendingIncome: totalIncome - paidIncome,
-      pendingExpense: totalExpense - paidExpense,
-    };
-  }, [filteredContracts]);
-
-  const toggleContract = (id: string) => {
-    setExpandedContracts((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleMonth = (month: string) => {
-    setExpandedMonths((prev) => {
-      const next = new Set(prev);
-      if (next.has(month)) next.delete(month); else next.add(month);
-      return next;
-    });
-  };
-
-  // 筛选该月对应的合同（基于过滤后的合同数据）
-  const getContractsForMonth = (month: string) => {
-    if (!data) return [];
-    return filteredContracts.filter((c) =>
-      c.bills.some((b) => b.dueDate.startsWith(month))
-    );
-  };
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/40" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-32 text-center">
+        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <Button variant="outline" size="sm" onClick={loadData}>重新加载</Button>
       </div>
     );
   }
 
   if (!data) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <Inbox className="h-16 w-16 mb-4 text-muted-foreground/40" />
-        <p className="text-lg font-medium">暂无台账数据</p>
-        <p className="text-sm mt-1">当前没有合同台账记录，创建合同后将自动汇总</p>
-      </div>
-    );
+    return <div className="py-32 text-center text-sm text-muted-foreground">暂无数据</div>;
   }
 
-  const hasFilters = searchQuery.trim() !== '' || statusFilter !== 'all';
-  const summary = hasFilters ? filteredSummary : data.summary;
+  const current = activeTab === 'month' ? data.monthly : data.yearly;
+  const expiringList = expiringTab === 7
+    ? data.expiring.days7
+    : expiringTab === 15 ? data.expiring.days15 : data.expiring.days30;
+  const maxTrendVal = Math.max(...data.trend.flatMap(t => [t.income, t.expense]), 1);
 
   return (
-    <div className="space-y-6">
-      {/* 页面标题与视图切换 */}
-      <div className="flex items-center justify-between">
+    <div className="min-h-screen pb-24">
+      {/* 页面标题 */}
+      <div className="mb-12">
+        <h1 className="text-[28px] font-normal tracking-tight text-foreground">合同台账</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          共 <span className="text-foreground tabular-nums">{data.summary.total}</span> 份合同 · 总额 <span className="text-foreground tabular-nums">{formatCurrency(data.summary.totalAmount)}</span>
+        </p>
+      </div>
+
+      {/* 收支概览 */}
+      <div className="mb-14">
+        <div className="flex items-center gap-1 mb-7">
+          <button
+            onClick={() => setActiveTab('month')}
+            className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+              activeTab === 'month'
+                ? 'text-foreground bg-secondary/80 font-normal'
+                : 'text-muted-foreground hover:text-foreground/80'
+            }`}
+          >
+            本月
+          </button>
+          <button
+            onClick={() => setActiveTab('year')}
+            className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+              activeTab === 'year'
+                ? 'text-foreground bg-secondary/80 font-normal'
+                : 'text-muted-foreground hover:text-foreground/80'
+            }`}
+          >
+            本年
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500/60" strokeWidth={1.5} />
+              <span className="text-xs text-muted-foreground">收入</span>
+            </div>
+            <p className="text-4xl font-extralight tabular-nums tracking-tight text-emerald-600/90">
+              {formatCurrency(current.income)}
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <ArrowDownRight className="h-3.5 w-3.5 text-rose-500/60" strokeWidth={1.5} />
+              <span className="text-xs text-muted-foreground">支出</span>
+            </div>
+            <p className="text-4xl font-extralight tabular-nums tracking-tight text-rose-600/90">
+              {formatCurrency(current.expense)}
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet className="h-3.5 w-3.5 text-muted-foreground/50" strokeWidth={1.5} />
+              <span className="text-xs text-muted-foreground">净额</span>
+            </div>
+            <p className={`text-4xl font-extralight tabular-nums tracking-tight ${
+              current.net >= 0 ? 'text-foreground/90' : 'text-rose-600/90'
+            }`}>
+              {current.net >= 0 ? '' : '-'}
+              {formatCurrency(Math.abs(current.net))}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-px bg-border/40 mb-14" />
+
+      {/* 趋势 + 类型分布 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 mb-14">
+        {/* 收支趋势 */}
         <div>
-          <h1 className="text-2xl font-bold">财务管理台账</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            自动汇总营收合同与支付合同的应收/应付数据
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {(['all', 'income', 'expense'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setViewType(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                viewType === t
-                  ? t === 'income'
-                    ? 'bg-green-100 text-green-700 border-2 border-green-300'
-                    : t === 'expense'
-                    ? 'bg-orange-100 text-orange-700 border-2 border-orange-300'
-                    : 'bg-primary/10 text-primary border-2 border-primary/30'
-                  : 'bg-muted text-muted-foreground border-2 border-transparent hover:bg-accent'
-              }`}
-            >
-              {t === 'all' ? '全部台账' : t === 'income' ? '应收台账' : '应付台账'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 搜索与筛选栏 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="搜索合同名称..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-        >
-          <option value="all">全部状态</option>
-          <option value="PAID">已付</option>
-          <option value="PENDING">待付</option>
-          <option value="OVERDUE">逾期</option>
-        </select>
-      </div>
-
-      {/* 汇总统计卡片（筛选后自动重算） */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* 应收汇总 */}
-        <div className="rounded-xl border bg-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-green-100">
-              <DollarSign className="h-5 w-5 text-green-600" />
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">应收汇总（营收合同）</span>
-          </div>
-          <div className="text-2xl font-bold text-green-600">{formatMoney(summary.totalIncome)}</div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-green-600">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>已收</span>
-              </div>
-              <span className="font-semibold">{formatMoney(summary.paidIncome)}</span>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-yellow-600">
-                <Clock className="h-3.5 w-3.5" />
-                <span>未收</span>
-              </div>
-              <span className="font-semibold">{formatMoney(summary.pendingIncome)}</span>
-            </div>
-          </div>
-          {/* 进度条 */}
-          {summary.totalIncome > 0 && (
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="bg-green-500 h-2 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (summary.paidIncome / summary.totalIncome) * 100)}%` }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 应付汇总 */}
-        <div className="rounded-xl border bg-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-orange-100">
-              <CreditCard className="h-5 w-5 text-orange-600" />
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">应付汇总（支付合同）</span>
-          </div>
-          <div className="text-2xl font-bold text-orange-600">{formatMoney(summary.totalExpense)}</div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-green-600">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>已付</span>
-              </div>
-              <span className="font-semibold">{formatMoney(summary.paidExpense)}</span>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-yellow-600">
-                <Clock className="h-3.5 w-3.5" />
-                <span>未付</span>
-              </div>
-              <span className="font-semibold">{formatMoney(summary.pendingExpense)}</span>
-            </div>
-          </div>
-          {/* 进度条 */}
-          {summary.totalExpense > 0 && (
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="bg-orange-500 h-2 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (summary.paidExpense / summary.totalExpense) * 100)}%` }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 净额汇总 */}
-        <div className="rounded-xl border bg-card p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-lg ${summary.totalIncome - summary.totalExpense >= 0 ? 'bg-blue-100' : 'bg-red-100'}`}>
-              {summary.totalIncome - summary.totalExpense >= 0
-                ? <ArrowUpRight className="h-5 w-5 text-blue-600" />
-                : <ArrowDownRight className="h-5 w-5 text-red-600" />
-              }
-            </div>
-            <span className="text-sm font-medium text-muted-foreground">收支净额</span>
-          </div>
-          <div className={`text-2xl font-bold ${summary.totalIncome - summary.totalExpense >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-            {formatMoney(summary.totalIncome - summary.totalExpense)}
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="space-y-1">
-              <span className="text-muted-foreground">营收总额</span>
-              <span className="font-semibold text-green-600">{formatMoney(summary.totalIncome)}</span>
-            </div>
-            <div className="space-y-1">
-              <span className="text-muted-foreground">支付总额</span>
-              <span className="font-semibold text-orange-600">{formatMoney(summary.totalExpense)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 月度台账明细 */}
-      <div className="rounded-xl border bg-card">
-        <div className="px-5 py-4 border-b">
-          <h2 className="font-semibold">月度台账明细</h2>
-        </div>
-        {data.monthly.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">暂无月度数据</div>
-        ) : (
-          <div className="divide-y">
-            {data.monthly.map((m) => {
-              const monthContracts = getContractsForMonth(m.month);
-              const isMonthExpanded = expandedMonths.has(m.month);
+          <h3 className="text-xs font-normal uppercase tracking-wider text-muted-foreground mb-7">
+            近6个月趋势
+          </h3>
+          <div className="flex items-end justify-between gap-2 h-40 px-1">
+            {data.trend.map((t, i) => {
+              const incomeH = Math.max((t.income / maxTrendVal) * 100, 2);
+              const expenseH = Math.max((t.expense / maxTrendVal) * 100, 2);
               return (
-                <div key={m.month}>
-                  {/* 月份行 */}
-                  <button
-                    onClick={() => toggleMonth(m.month)}
-                    className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-muted/50 transition-colors text-left"
-                  >
-                    {isMonthExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                    <span className="font-medium min-w-[100px]">{m.month}</span>
-                    <span className="text-xs text-muted-foreground">{m.contractCount} 份合同</span>
-                    <div className="flex-1" />
-                    <div className="flex items-center gap-6 text-sm">
-                      {viewType !== 'expense' && (
-                        <>
-                          <div className="text-right">
-                            <div className="text-muted-foreground text-xs">应收</div>
-                            <div className="text-green-600 font-medium">{formatMoney(m.incomeAmount)}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-muted-foreground text-xs">实收</div>
-                            <div className="font-medium">{formatMoney(m.incomePaid)}</div>
-                          </div>
-                        </>
-                      )}
-                      {viewType !== 'income' && (
-                        <>
-                          <div className="text-right">
-                            <div className="text-muted-foreground text-xs">应付</div>
-                            <div className="text-orange-600 font-medium">{formatMoney(m.expenseAmount)}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-muted-foreground text-xs">实付</div>
-                            <div className="font-medium">{formatMoney(m.expensePaid)}</div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </button>
+                <div key={i} className="flex-1 flex flex-col items-center gap-2.5">
+                  <div className="w-full flex items-end justify-center gap-1 h-32">
+                    <div
+                      className="w-1.5 bg-emerald-200/70 rounded-sm transition-all hover:bg-emerald-300/80"
+                      style={{ height: `${incomeH}%` }}
+                      title={`收入 ${formatCurrency(t.income)}`}
+                    />
+                    <div
+                      className="w-1.5 bg-rose-200/70 rounded-sm transition-all hover:bg-rose-300/80"
+                      style={{ height: `${expenseH}%` }}
+                      title={`支出 ${formatCurrency(t.expense)}`}
+                    />
+                  </div>
+                  <span className="text-[11px] text-muted-foreground/70 tabular-nums">{t.month}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-center gap-8 mt-6">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-sm bg-emerald-300/80" />
+              <span className="text-[11px] text-muted-foreground/70">收入</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-sm bg-rose-300/80" />
+              <span className="text-[11px] text-muted-foreground/70">支出</span>
+            </div>
+          </div>
+        </div>
 
-                  {/* 月份展开 - 合同列表 */}
-                  {isMonthExpanded && (
-                    <div className="border-t bg-muted/20">
-                      {monthContracts.length === 0 ? (
-                        <div className="px-5 py-3 text-sm text-muted-foreground">该月无关联合同</div>
-                      ) : (
-                        monthContracts.map((c) => {
-                          const monthBills = c.bills.filter((b) => b.dueDate.startsWith(m.month));
-                          return (
-                            <div key={c.id}>
-                              <button
-                                onClick={() => toggleContract(c.id)}
-                                className="w-full flex items-center gap-3 px-8 py-3 hover:bg-muted/50 transition-colors text-left"
-                              >
-                                {expandedContracts.has(c.id) ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                                  c.financialType === 'INCOME' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                                }`}>
-                                  {c.financialType === 'INCOME' ? '营收' : '支付'}
-                                </span>
-                                <span className="text-sm font-medium">{c.name}</span>
-                                <span className="text-xs text-muted-foreground">{c.partnerName}</span>
-                                <div className="flex-1" />
-                                <span className="text-sm font-medium">{formatMoney(monthBills.reduce((s, b) => s + b.amount, 0))}</span>
-                              </button>
-
-                              {/* 合同展开 - 账单明细 */}
-                              {expandedContracts.has(c.id) && (
-                                <div className="border-t bg-background">
-                                  {monthBills.map((b) => {
-                                    const badge = STATUS_BADGE[b.status] || STATUS_BADGE.PENDING;
-                                    return (
-                                      <div key={b.id} className="flex items-center gap-3 px-12 py-2.5 text-sm hover:bg-muted/30">
-                                        <span className="text-muted-foreground min-w-[120px]">{b.title}</span>
-                                        <span className="font-medium">{formatMoney(b.amount)}</span>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${badge.color}`}>
-                                          <badge.icon className="h-3 w-3" />
-                                          {badge.label}
-                                        </span>
-                                        {b.status === 'OVERDUE' && b.lateFee && (
-                                          <span className="text-xs text-red-500">滞纳金: {formatMoney(b.lateFee)}</span>
-                                        )}
-                                        <div className="flex-1" />
-                                        <span className="text-xs text-muted-foreground">到期 {b.dueDate}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
+        {/* 合同类型分布 */}
+        <div>
+          <h3 className="text-xs font-normal uppercase tracking-wider text-muted-foreground mb-7">
+            类型分布
+          </h3>
+          {data.typeDistribution.length === 0 ? (
+            <p className="text-sm text-muted-foreground/50 text-center py-12">暂无数据</p>
+          ) : (
+            <div className="space-y-5">
+              {data.typeDistribution.map((t, i) => {
+                const maxCount = Math.max(...data.typeDistribution.map(x => x.count));
+                const pct = (t.count / maxCount) * 100;
+                return (
+                  <div key={i}>
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="text-foreground/70 text-sm">{TYPE_LABELS[t.type] || t.type}</span>
+                      <span className="text-muted-foreground/70 tabular-nums text-[11px]">
+                        {t.count} 份 · {formatCurrency(t.amount)}
+                      </span>
                     </div>
-                  )}
+                    <div className="h-0.5 bg-muted/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-foreground/15 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="h-px bg-border/40 mb-14" />
+
+      {/* 到期提醒 */}
+      <div className="mb-14">
+        <div className="flex items-center justify-between mb-7">
+          <h3 className="text-xs font-normal uppercase tracking-wider text-muted-foreground">
+            到期提醒
+          </h3>
+          <div className="flex items-center gap-0.5">
+            {[7, 15, 30].map(d => (
+              <button
+                key={d}
+                onClick={() => setExpiringTab(d as 7 | 15 | 30)}
+                className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                  expiringTab === d
+                    ? 'text-foreground bg-secondary/70 font-normal'
+                    : 'text-muted-foreground hover:text-foreground/70'
+                }`}
+              >
+                {d}日
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {expiringList.length === 0 ? (
+          <div className="text-center py-16">
+            <Calendar className="h-7 w-7 text-muted-foreground/15 mx-auto mb-3" strokeWidth={1} />
+            <p className="text-sm text-muted-foreground/50">未来 {expiringTab} 日暂无到期合同</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/30">
+            {expiringList.map((c, i) => {
+              const days = daysUntil(c.endDate);
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-4 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-foreground/80 truncate">{c.name}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">
+                      {c.partyA || '—'}  ·  {c.partyB || '—'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-6 shrink-0">
+                    {c.amount && (
+                      <div className="text-right">
+                        <p className={`text-sm tabular-nums text-foreground/80 ${
+                          c.direction === 'INCOME' ? 'text-emerald-600/80' : 'text-rose-600/80'
+                        }`}>
+                          {c.direction === 'INCOME' ? '+' : '-'}{formatCurrency(c.amount)}
+                        </p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5 tabular-nums">
+                          {formatDate(c.endDate)}
+                        </p>
+                      </div>
+                    )}
+                    <div className={`text-[11px] tabular-nums px-2.5 py-1 rounded-sm ${
+                      days <= 7
+                        ? 'bg-rose-50/80 text-rose-500'
+                        : days <= 15
+                          ? 'bg-amber-50/80 text-amber-600'
+                          : 'bg-secondary/60 text-muted-foreground/70'
+                    }`}>
+                      {days}天
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -446,9 +337,26 @@ export default function LedgerPage() {
         )}
       </div>
 
-      {/* 备注 */}
-      <div className="text-xs text-muted-foreground px-1">
-        * 台账数据根据合同关联的账单自动汇总生成。营收合同（INCOME）计入应收，支付合同（EXPENSE）计入应付。
+      <div className="h-px bg-border/40 mb-14" />
+
+      {/* 状态分布 */}
+      <div className="mb-8">
+        <h3 className="text-xs font-normal uppercase tracking-wider text-muted-foreground mb-7">
+          状态分布
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {data.statusDistribution.map((s, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border/40"
+            >
+              <span className="text-xs text-muted-foreground/70">
+                {STATUS_LABELS[s.status] || s.status}
+              </span>
+              <span className="text-sm text-foreground/70 tabular-nums font-light">{s.count}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

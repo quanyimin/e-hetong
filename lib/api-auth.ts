@@ -24,9 +24,15 @@ export function forbidden(msg?: string) {
 // ============================================================
 export function getCurrentUser(request: NextRequest): { id: string; role: string } | null {
   try {
-    const cookie = request.cookies.get('ehetong_auth')?.value;
-    if (!cookie) return null;
-    return JSON.parse(cookie);
+    const authCookie = request.cookies.get('ehetong_auth')?.value;
+    if (authCookie) return JSON.parse(authCookie);
+
+    // 备选：从 ehetong_userId + ehetong_userRole 组合获取
+    const userId = request.cookies.get('ehetong_userId')?.value;
+    const userRole = request.cookies.get('ehetong_userRole')?.value || 'user';
+    if (userId) return { id: userId, role: userRole };
+
+    return null;
   } catch {
     return null;
   }
