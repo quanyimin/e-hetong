@@ -86,6 +86,85 @@ export const INDUSTRY_CONFIGS: IndustryConfig[] = [
     ],
   },
   {
+    code: 'TECH',
+    name: '科技互联网',
+    contractTypes: [
+      {
+        code: 'SOFTWARE_DEV', name: '软件开发合同', description: '适用于定制软件开发项目',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'projectScope', label: '开发内容', type: 'textarea', required: true, placeholder: '功能模块、技术栈、交付物等' }, { key: 'milestones', label: '里程碑节点', type: 'textarea', required: false, placeholder: '各阶段交付时间' }, { key: 'techStack', label: '技术栈要求', type: 'text', required: false, placeholder: '如：React + Node.js + PostgreSQL' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份软件开发合同，甲方为委托方，乙方为开发方。需包含：开发内容与功能范围、技术栈、里程碑与交付时间、验收标准与测试、源代码归属与知识产权、维护期与技术支持、保密条款。注意知识产权归属条款是核心。',
+      },
+      {
+        code: 'SAAS', name: 'SaaS服务协议', description: '适用于软件即服务订阅模式',
+        fields: [...BASE_FIELDS, { key: 'serviceName', label: '服务名称', type: 'text', required: true, placeholder: '如：XX企业管理系统' }, { key: 'subscriptionFee', label: '订阅费用（元/年）', type: 'number', required: true, placeholder: '如 12000' }, { key: 'userCount', label: '授权用户数', type: 'number', required: false, placeholder: '如 50' }, { key: 'serviceLevel', label: '服务等级(SLA)', type: 'textarea', required: false, placeholder: '可用性99.9%、响应时间等' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份SaaS服务协议，甲方为服务提供方，乙方为订阅方。需包含：服务内容与功能、订阅费用与计费周期、授权用户数、SLA服务等级承诺、数据安全与隐私、服务终止与数据导出、续约与取消条款。',
+      },
+      {
+        code: 'TECH_DEVELOPMENT', name: '技术委托开发合同', description: '适用于技术研发外包',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'techRequirements', label: '技术要求', type: 'textarea', required: true, placeholder: '技术指标、性能参数等' }, { key: 'deliverables', label: '交付成果', type: 'textarea', required: true, placeholder: '源代码、文档、部署手册等' }, { key: 'ipOwnership', label: '知识产权归属', type: 'text', required: true, placeholder: '如：全部归甲方所有' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份技术委托开发合同，甲方为委托方，乙方为研发方。需包含：技术需求与指标、研发周期与里程碑、交付物清单、知识产权归属（核心条款）、研发经费与支付、验收与测试、保密义务。',
+      },
+    ],
+  },
+  {
+    code: 'TRADE',
+    name: '贸易零售',
+    contractTypes: [
+      {
+        code: 'PURCHASE_SALE', name: '购销合同', description: '适用于大宗商品买卖',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'productName', label: '商品名称/规格', type: 'text', required: true, placeholder: '如：500ml装矿泉水' }, { key: 'quantity', label: '数量', type: 'number', required: true, placeholder: '如 1000' }, { key: 'unit', label: '单位', type: 'text', required: false, placeholder: '如：箱、个、吨' }, { key: 'deliveryDate', label: '交货日期', type: 'date', required: true }, { key: 'deliveryLocation', label: '交货地点', type: 'text', required: true, placeholder: '如：甲方仓库' }],
+        aiPromptExtra: '这是一份购销合同，甲方为卖方，乙方为买方。需包含：商品名称规格、数量与单位、单价与总价、交货时间地点、验收标准、付款方式与账期、质量保证期、退换货条款、违约责任。',
+      },
+      {
+        code: 'AGENCY_SALE', name: '代理销售合同', description: '适用于代理销售合作',
+        fields: [...BASE_FIELDS, { key: 'productLine', label: '代理产品线', type: 'textarea', required: true, placeholder: '代理产品范围' }, { key: 'territory', label: '代理区域', type: 'text', required: true, placeholder: '如：华东地区' }, { key: 'salesTarget', label: '销售目标（元）', type: 'number', required: false, placeholder: '如 1000000' }, { key: 'commission', label: '佣金比例(%)', type: 'number', required: true, placeholder: '如 15' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份代理销售合同，甲方为品牌方/供货方，乙方为代理商。需包含：代理产品范围、代理区域与独家性、销售目标、佣金比例与结算方式、市场推广责任、最低采购量、合同续约条件。',
+      },
+      {
+        code: 'SUPPLY', name: '供货合同', description: '适用于长期供货合作',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'supplyItems', label: '供货清单', type: 'textarea', required: true, placeholder: '品类、规格、价格' }, { key: 'supplyCycle', label: '供货周期', type: 'text', required: false, placeholder: '如：每月1号' }, { key: 'paymentTerms', label: '结算账期', type: 'select', required: false, options: [{ label: '月结30天', value: 'NET30' }, { label: '月结60天', value: 'NET60' }, { label: '现结', value: 'CASH' }, { label: '预付款', value: 'PREPAY' }] }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份供货合同，甲方为供应商，乙方为采购方。需包含：供货清单与价格、供货周期与频次、结算账期、最低订单量、品质保证、迟延交付违约金、价格调整机制。',
+      },
+    ],
+  },
+  {
+    code: 'CONSTRUCTION',
+    name: '建筑工程',
+    contractTypes: [
+      {
+        code: 'CONSTRUCTION_WORK', name: '建设工程施工合同', description: '适用于建筑工程施工',
+        fields: [...BASE_FIELDS, { key: 'projectName', label: '工程名称', type: 'text', required: true, placeholder: '如：XX大厦建设项目' }, { key: 'projectLocation', label: '工程地点', type: 'text', required: true, placeholder: '详细地址' }, { key: 'contractPrice', label: '合同价款（元）', type: 'number', required: true, placeholder: '如 5000000' }, { key: 'duration', label: '工期（天）', type: 'number', required: true, placeholder: '如 180' }, { key: 'qualityStandard', label: '质量标准', type: 'text', required: false, placeholder: '如：合格/优良/国家标准' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份建设工程施工合同，甲方为发包方，乙方为承包方。需包含：工程概况（名称、地点、内容）、合同价款与支付方式、工期与进度计划、质量标准与验收、安全生产责任、工程变更程序、竣工结算、质量保修期、违约责任。注意应引用《建设工程施工合同》示范文本通用条款。',
+      },
+      {
+        code: 'SUBCONTRACT', name: '工程分包合同', description: '适用于专业工程分包',
+        fields: [...BASE_FIELDS, { key: 'mainProject', label: '总包工程名称', type: 'text', required: true, placeholder: '总包工程' }, { key: 'subcontractScope', label: '分包范围', type: 'textarea', required: true, placeholder: '如：消防工程/水电安装等' }, { key: 'subcontractPrice', label: '分包价款（元）', type: 'number', required: true, placeholder: '如 800000' }, { key: 'subDuration', label: '分包工期（天）', type: 'number', required: true, placeholder: '如 90' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份工程分包合同，甲方为总承包方，乙方为分包方。需包含：分包范围与内容、分包价款与支付、分包工期、质量验收标准、安全责任划分、总包管理配合、材料供应责任。注意：分包须经业主同意，主体结构不得分包。',
+      },
+      {
+        code: 'DESIGN', name: '工程设计合同', description: '适用于建筑工程设计',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'projectInfo', label: '项目概况', type: 'textarea', required: true, placeholder: '建设规模、用地面积等' }, { key: 'designStage', label: '设计阶段', type: 'text', required: false, placeholder: '如：方案设计/初步设计/施工图设计' }, { key: 'designFee', label: '设计费（元）', type: 'number', required: true, placeholder: '如 300000' }, { key: 'deliveryStandard', label: '交付标准', type: 'textarea', required: false, placeholder: '图纸目录、设计说明等' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份工程设计合同，甲方为建设单位，乙方为设计单位。需包含：项目概况与设计范围、设计阶段与内容、设计费与支付方式、设计文件交付时间与标准、双方协作义务、设计变更处理、知识产权归属、违约责任。',
+      },
+    ],
+  },
+  {
+    code: 'EDUCATION',
+    name: '教育培训',
+    contractTypes: [
+      {
+        code: 'TRAINING', name: '培训服务合同', description: '适用于教育培训服务',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'courseName', label: '课程名称', type: 'text', required: true, placeholder: '如：Python编程进阶班' }, { key: 'classHours', label: '课时数', type: 'number', required: true, placeholder: '如 48' }, { key: 'teachingMode', label: '授课方式', type: 'select', required: false, options: [{ label: '线下授课', value: 'OFFLINE' }, { label: '线上直播', value: 'ONLINE_LIVE' }, { label: '录播', value: 'RECORDED' }, { label: '混合授课', value: 'BLENDED' }] }, { key: 'refundPolicy', label: '退费规则', type: 'textarea', required: false, placeholder: '如：开课前全额退，开课后按比例' }, ...DATE_FIELDS],
+        aiPromptExtra: '这是一份培训服务合同，甲方为培训机构，乙方为学员/委托方。需包含：课程名称与内容、课时安排、授课方式、培训费用与支付方式、退费规则（核心条款）、学员考勤管理、证书颁发、免责条款。注意退费规则应符合当地教育部门要求。',
+      },
+      {
+        code: 'COURSE', name: '课程购买协议', description: '适用于在线课程购买',
+        fields: [...BASE_FIELDS, ...MONEY_FIELDS, { key: 'courseList', label: '购买课程清单', type: 'textarea', required: true, placeholder: '课程名称、单价、数量' }, { key: 'accessPeriod', label: '学习有效期', type: 'text', required: false, placeholder: '如：12个月' }, { key: 'refundRule', label: '退款规则', type: 'textarea', required: false, placeholder: '如：购买后7天内无条件退款' }],
+        aiPromptExtra: '这是一份在线课程购买协议，甲方为课程提供方，乙方为购买方。需包含：课程清单与价格、学习有效期、用户账户与使用规则、退款政策、知识产权保护（课程内容版权）、数据隐私保护、服务暂停与终止条款。',
+      },
+    ],
+  },
+  {
     code: null,
     name: '通用',
     contractTypes: [

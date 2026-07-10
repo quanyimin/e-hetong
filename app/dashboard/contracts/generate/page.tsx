@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth-context';
 import {
   Wand2, FileText, Loader2, AlertCircle, RotateCcw,
   Save, Eye, Edit3, Building2, UtensilsCrossed, LayoutDashboard, ArrowLeft,
+  Monitor, ShoppingBag, HardHat, GraduationCap,
 } from 'lucide-react';
 import { getContractTypes, getFieldConfig, getContractTypeName, getIndustryName, INDUSTRY_CONFIGS } from '@/lib/industry-config';
 
@@ -19,6 +20,10 @@ const INDUSTRIES = [
   { code: 'GENERAL', name: '通用', icon: LayoutDashboard, color: 'text-gray-600 bg-gray-50' },
   { code: 'LANDLORD', name: '房东/租赁', icon: Building2, color: 'text-blue-600 bg-blue-50' },
   { code: 'RESTAURANT', name: '餐饮门店', icon: UtensilsCrossed, color: 'text-orange-600 bg-orange-50' },
+  { code: 'TECH', name: '科技互联网', icon: Monitor, color: 'text-purple-600 bg-purple-50' },
+  { code: 'TRADE', name: '贸易零售', icon: ShoppingBag, color: 'text-green-600 bg-green-50' },
+  { code: 'CONSTRUCTION', name: '建筑工程', icon: HardHat, color: 'text-yellow-600 bg-yellow-50' },
+  { code: 'EDUCATION', name: '教育培训', icon: GraduationCap, color: 'text-pink-600 bg-pink-50' },
 ];
 
 function getIndustryIcon(industryCode: string) {
