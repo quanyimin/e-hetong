@@ -12,6 +12,10 @@ datasource db {
 // 设计原则：核心主表固定，行业扩展字段 JSON 化
 // ============================================================
 
+// ===== 身份类型枚举（数据隔离核心） =====
+// SQLite 不支持 Prisma enum，使用 String 类型 + 应用层校验
+// 值: PERSONAL（个人身份）| ENTERPRISE（企业/组织身份）
+
 // ===== 用户与认证 =====
 model User {
   id              String    @id @default(cuid())
@@ -233,6 +237,7 @@ model TenantEnabledScene {
 model PurchasedPlugin {
   id            String   @id @default(cuid())
   tenantId      String   @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   pluginId      String   @map("plugin_id")
   sceneId       String?  @map("scene_id")   // IndustryScene ID
   status        String   @default("active")  // active | expired | cancelled
@@ -254,6 +259,7 @@ model ContractFolder {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   tenantId  String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name      String
   parentId  String?  @map("parent_id")
   sortOrder Int      @default(0) @map("sort_order")
@@ -275,6 +281,7 @@ model Partner {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   tenantId  String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name      String
   phone     String?
   company   String?
@@ -298,6 +305,7 @@ model Contract {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
   tenantId    String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name        String
   type        String?               // sale | lease | labor | service | loan | nda | other
   category    String?               // 行业分类（自动归类）
@@ -368,6 +376,7 @@ model Bill {
   id         String   @id @default(cuid())
   contractId String   @map("contract_id")
   tenantId   String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   partnerId  String?  @map("partner_id")
   title      String?
   amount     Float    @default(0)
@@ -400,6 +409,7 @@ model Reminder {
   licenseId  String?   @map("license_id")
   userId     String    @map("user_id")
   tenantId   String?   @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   remindAt   DateTime  @map("remind_at")
   remindType String    @default("CONTRACT_EXPIRE") @map("remind_type")
   title      String?
@@ -425,6 +435,7 @@ model Asset {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
   tenantId    String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name        String
   type        String   // HOUSE | EQUIPMENT | LAND | VEHICLE | OTHER
   identifier  String?  // 编号/车牌号/设备序列号
@@ -451,6 +462,7 @@ model License {
   id             String   @id @default(cuid())
   userId         String   @map("user_id")
   tenantId       String?  @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name           String
   licenseNumber  String?  @map("license_number")
   issuingAuthority String? @map("issuing_authority")
@@ -521,6 +533,7 @@ model Department {
 model Approval {
   id          String   @id @default(cuid())
   tenantId    String   @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   contractId  String?  @map("contract_id")
   title       String
   type        String   // CONTRACT | SEAL | PAYMENT | OTHER
@@ -543,6 +556,7 @@ model Approval {
 model Seal {
   id          String    @id @default(cuid())
   tenantId    String    @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   name        String
   status      String    @default("ACTIVE") // ACTIVE | DISABLED
   lastUsedAt  DateTime? @map("last_used_at")
@@ -559,6 +573,7 @@ model Seal {
 model SealRequest {
   id           String    @id @default(cuid())
   tenantId     String    @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   sealId       String    @map("seal_id")
   applicantId  String    @map("applicant_id")
   purpose      String
@@ -581,6 +596,7 @@ model SealRequest {
 model RolePermission {
   id        String   @id @default(cuid())
   tenantId  String   @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   role      String   // ADMIN | EDITOR | VIEWER
   module    String   // CONTRACT | LICENSE | APPROVAL
   actions   String   // JSON array, e.g. ["VIEW","CREATE"]
@@ -597,6 +613,7 @@ model RolePermission {
 model AuditLog {
   id        String   @id @default(cuid())
   tenantId  String   @map("tenant_id")
+  identityType String @default("PERSONAL") @map("identity_type")
   userId    String   @map("user_id")
   action    String   // CREATE | UPDATE | DELETE | APPROVE | REJECT | EXPORT
   entity    String   // CONTRACT | BILL | PARTNER | TENANT | ASSET | LICENSE
