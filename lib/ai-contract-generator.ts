@@ -18,8 +18,15 @@ function buildSystemPrompt(params: GenerateContractParams): string {
   const { industry, contractTypeName, parameters, additionalRequirements } = params;
 
   // 构建行业描述
-  const industryDesc = industry === 'LANDLORD' ? '（房东/租赁行业）' :
-                        industry === 'RESTAURANT' ? '（餐饮行业）' : '（通用行业）';
+  const industryName: Record<string, string> = {
+    LANDLORD: '（房东/租赁行业）',
+    RESTAURANT: '（餐饮门店行业）',
+    TECH: '（科技互联网行业）',
+    TRADE: '（贸易零售行业）',
+    CONSTRUCTION: '（建筑工程行业）',
+    EDUCATION: '（教育培训行业）',
+  };
+  const industryDesc = industryName[industry || ''] || '（通用行业）';
 
   // 构建参数文本
   const paramText = Object.entries(parameters)
@@ -36,6 +43,25 @@ function buildSystemPrompt(params: GenerateContractParams): string {
         salary: '月薪', probation: '试用期', confidentialScope: '保密范围',
         confidentialTerm: '保密期限', productList: '商品清单', deliveryDate: '交货日期',
         deliveryLocation: '交货地点', rentIncrease: '租金递增', rent: '租金',
+        // 科技互联网
+        projectScope: '开发内容', techStack: '技术栈', milestones: '里程碑节点',
+        serviceName: '服务名称', subscriptionFee: '订阅费用', userCount: '授权用户数',
+        serviceLevel: '服务等级(SLA)', techRequirements: '技术要求', deliverables: '交付成果',
+        ipOwnership: '知识产权归属',
+        // 贸易零售
+        productName: '商品名称/规格', unit: '单位', productLine: '代理产品线',
+        territory: '代理区域', salesTarget: '销售目标', commission: '佣金比例',
+        supplyItems: '供货清单', supplyCycle: '供货周期', paymentTerms: '结算账期',
+        // 建筑工程
+        projectName: '工程名称', projectLocation: '工程地点', contractPrice: '合同价款',
+        duration: '工期', qualityStandard: '质量标准', mainProject: '总包工程名称',
+        subcontractScope: '分包范围', subcontractPrice: '分包价款', subDuration: '分包工期',
+        projectInfo: '项目概况', designStage: '设计阶段', designFee: '设计费',
+        deliveryStandard: '交付标准',
+        // 教育培训
+        courseName: '课程名称', classHours: '课时数', teachingMode: '授课方式',
+        refundPolicy: '退费规则', courseList: '购买课程清单', accessPeriod: '学习有效期',
+        refundRule: '退款规则',
       };
       return `${labels[k] || k}: ${v}`;
     })
