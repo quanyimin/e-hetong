@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireOrgAccess, requireSameOrg } from '@/lib/identity-middleware';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const asset = await prisma.asset.findUnique({ where: { id: params.id } });
     if (!asset) return NextResponse.json({ error: '资产不存在' }, { status: 404 });
+
+    const orgError = requireSameOrg(identity, asset?.identityType, asset?.tenantId);
+    if (orgError) return orgError;
+
     return NextResponse.json({ asset });
   } catch (error) {
     console.error('Error fetching asset:', error);
@@ -20,6 +28,14 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
+    const existing = await prisma.asset.findUnique({ where: { id: params.id } });
+    if (!existing) return NextResponse.json({ error: '资产不存在' }, { status: 404 });
+    const orgError = requireSameOrg(identity, existing?.identityType, existing?.tenantId);
+    if (orgError) return orgError;
+
     const body = await request.json();
     const updateData: Record<string, unknown> = {};
     const fields = ['name', 'type', 'identifier', 'description', 'address', 'status'];
@@ -46,6 +62,14 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
+    const existing = await prisma.asset.findUnique({ where: { id: params.id } });
+    if (!existing) return NextResponse.json({ error: '资产不存在' }, { status: 404 });
+    const orgError = requireSameOrg(identity, existing?.identityType, existing?.tenantId);
+    if (orgError) return orgError;
+
     await prisma.asset.delete({ where: { id: params.id } });
     return NextResponse.json({ message: '资产已删除' });
   } catch (error) {

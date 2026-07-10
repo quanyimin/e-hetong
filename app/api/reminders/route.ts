@@ -1,30 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized, forbidden } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
-// GET: 获取提醒列表（按租户隔离）
+// GET: 获取提醒列表（按身份隔离）
 export async function GET(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '15');
     const type = searchParams.get('type') || '';
     const status = searchParams.get('status') || '';
 
-    if (!tenantId) {
-      return NextResponse.json({ code: 1, message: '缺少tenantId参数' }, { status: 400 });
-    }
-
-    // 数据隔离校验
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    const membership = await prisma.userTenantRole.findFirst({
-      where: { userId: currentUser.id, tenantId },
-    });
-    if (!membership) return forbidden('您无权访问该主体');
-
-    const where: any = { tenantId };
+    const where: any = { ...buildFilter(identity) };
     if (type) where.remindType = type;
     // 兼容大小写：前端传小写，数据库存大写
     if (status) {
@@ -67,20 +58,12 @@ export async function GET(request: NextRequest) {
 // POST: 创建提醒
 export async function POST(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const body = await request.json();
-    const { tenantId, userId, contractId, contractName, title, message, remindAt, remindType } = body;
+    const { userId, contractId, contractName, title, message, remindAt, remindType } = body;
 
-    if (!tenantId) {
-      return NextResponse.json({ code: 1, message: '缺少tenantId' }, { status: 400 });
-    }
-
-    // 数据隔离校验
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    const membership = await prisma.userTenantRole.findFirst({
-      where: { userId: currentUser.id, tenantId },
-    });
-    if (!membership) return forbidden('您无权访问该主体');
     if (!userId) {
       return NextResponse.json({ code: 1, message: '缺少userId' }, { status: 400 });
     }
@@ -90,7 +73,8 @@ export async function POST(request: NextRequest) {
 
     // 创建提醒（不强制要求关联合同，允许独立提醒）
     const reminderData: any = {
-      tenantId,
+      identityType: identity.identityType,
+      tenantId: identity.orgId,
       userId,
       title,
       remindType: remindType || 'custom',

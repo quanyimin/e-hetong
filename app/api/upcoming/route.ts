@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
 
-    const uid = currentUser.id;
     const now = new Date();
     const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
     // 查询30天内到期的合同
     const contracts = await prisma.contract.findMany({
       where: {
-        userId: uid,
+        ...buildFilter(identity),
         endDate: { gte: now, lte: thirtyDaysLater },
         status: { not: 'ARCHIVED' },
       },
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     // 查询30天内到期的证照
     const licenses = await prisma.license.findMany({
       where: {
-        userId: uid,
+        ...buildFilter(identity),
         expireDate: { gte: now, lte: thirtyDaysLater },
       },
       select: { id: true, name: true, expireDate: true, type: true },
@@ -33,9 +33,9 @@ export async function GET(request: NextRequest) {
     // 查询30天内到期的账单（通过合同关联获取用户相关账单）
     const bills = await prisma.bill.findMany({
       where: {
+        ...buildFilter(identity),
         dueDate: { gte: now, lte: thirtyDaysLater },
         status: 'PENDING',
-        contract: { userId: uid },
       },
       select: { id: true, title: true, dueDate: true, amount: true },
     });

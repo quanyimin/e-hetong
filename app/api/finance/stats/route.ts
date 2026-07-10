@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
 
-    const uid = currentUser.id;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         type: 'INCOME',
         status: 'PAID',
         paidAt: { gte: monthStart, lte: monthEnd },
-        contract: { userId: uid },
+        contract: { ...buildFilter(identity) },
       },
       _sum: { amount: true },
     });
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         type: 'EXPENSE',
         status: 'PAID',
         paidAt: { gte: monthStart, lte: monthEnd },
-        contract: { userId: uid },
+        contract: { ...buildFilter(identity) },
       },
       _sum: { amount: true },
     });
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         type: 'INCOME',
         status: 'PAID',
         paidAt: { gte: lastMonthStart, lt: monthStart },
-        contract: { userId: uid },
+        contract: { ...buildFilter(identity) },
       },
       _sum: { amount: true },
     });
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     const recentBills = await prisma.bill.findMany({
       where: {
         status: 'PAID',
-        contract: { userId: uid },
+        contract: { ...buildFilter(identity) },
       },
       orderBy: { paidAt: 'desc' },
       take: 10,
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
           type: 'INCOME',
           status: 'PAID',
           paidAt: { gte: m, lte: mEnd },
-          contract: { userId: uid },
+          contract: { ...buildFilter(identity) },
         },
         _sum: { amount: true },
       });
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
           type: 'EXPENSE',
           status: 'PAID',
           paidAt: { gte: m, lte: mEnd },
-          contract: { userId: uid },
+          contract: { ...buildFilter(identity) },
         },
         _sum: { amount: true },
       });

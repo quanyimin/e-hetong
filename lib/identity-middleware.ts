@@ -10,6 +10,20 @@
  * 角色：
  * - 个人身份（identityType=PERSONAL, orgId=用户个人标识）
  * - 企业身份（identityType=ENTERPRISE, orgId=企业的 tenantId）
+ *
+ * 典型用法（API Route）：
+ *
+ *   import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
+ *
+ *   export async function GET(request: NextRequest) {
+ *     const { identity, error } = await requireOrgAccess(request);
+ *     if (error) return error;
+ *
+ *     const data = await prisma.contract.findMany({
+ *       where: { ...buildFilter(identity), ...otherFilters },
+ *     });
+ *     return NextResponse.json({ data });
+ *   }
  */
 
 import { NextResponse } from 'next/server';
@@ -28,29 +42,35 @@ export interface IdentityContext {
   userId: string;
 }
 
-interface AuthPayload {
-  userId: string;
-  tenantId?: string;
-  identityType?: string;
-}
-
-// ─── 工具函数 ────────────────────────────────────────────────
+// ─── 核心函数 ────────────────────────────────────────────────
 
 /**
- * 从 API 请求中提取身份上下文
- * 从请求头 X-Identity-Type / X-Org-Id 或 Cookie 中读取
+ * 从 API 请求中提取身份上下文并校验访问权限
+ *
+ * 调用方式：在所有业务 API Route 入口处调用
+ *   const { identity, error } = await requireOrgAccess(request);
+ *   if (error) return error;
+ *
+ * 数据来源（优先级）：
+ *   1. 请求头：x-identity-type / x-org-id / x-user-id（前端 fetch 时自动注入）
+ *   2. Cookie：ehetong_identityType / ehetong_orgId / ehetong_userId
+ *
+ * 校验内容：
+ *   - 用户是否存在（401）
+ *   - orgId 是否属于当前用户（403）
+ *   - 越权访问返回 403 ORG_FORBIDDEN
  */
-export async function extractIdentity(
+export async function requireOrgAccess(
   request: Request
-): Promise<{ identity: IdentityContext | null; error: NextResponse | null }> {
+): Promise<{ identity: IdentityContext; error: null } | { identity: null; error: NextResponse }> {
   const headers = request.headers;
 
-  // 1. 从请求头中读取身份信息（前端调用时自动注入）
+  // 1. 从请求头中读取身份信息
   let identityType = headers.get('x-identity-type') as IdentityType | null;
   let orgId = headers.get('x-org-id');
   let userId = headers.get('x-user-id');
 
-  // 2. 如果请求头缺失，尝试从 Cookie 读取
+  // 2. 从 Cookie 读取
   if (!userId || !orgId) {
     const cookie = headers.get('cookie') || '';
     const cookies = Object.fromEntries(
@@ -59,13 +79,12 @@ export async function extractIdentity(
         return [k, v.join('=')];
       })
     );
-
     if (!userId) userId = cookies['ehetong_userId'];
     if (!orgId) orgId = cookies['ehetong_orgId'];
     if (!identityType) identityType = (cookies['ehetong_identityType'] as IdentityType) || null;
   }
 
-  // 3. 缺少必要信息 → 未登录
+  // 3. 缺少必要信息 → 401
   if (!userId || !orgId) {
     return {
       identity: null,
@@ -77,7 +96,7 @@ export async function extractIdentity(
   }
 
   // 4. 校验用户是否存在
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!user) {
     return {
       identity: null,
@@ -88,27 +107,30 @@ export async function extractIdentity(
     };
   }
 
-  // 5. 校验 orgId 是否属于当前用户
+  // 5. 校验 orgId 归属 → 403 越权
   const hasAccess = await verifyOrgAccess(userId, orgId);
   if (!hasAccess) {
     return {
       identity: null,
       error: NextResponse.json(
-        { error: '无权访问该组织的数据', code: 'ORG_FORBIDDEN' },
+        { error: '无权访问该组织的数据，禁止越权查询', code: 'ORG_FORBIDDEN' },
         { status: 403 }
       ),
     };
   }
 
-  return {
-    identity: {
-      identityType: identityType || 'PERSONAL',
-      orgId,
-      userId,
-    },
-    error: null,
+  const identity: IdentityContext = {
+    identityType: identityType || 'PERSONAL',
+    orgId,
+    userId,
   };
+
+  return { identity, error: null };
 }
+
+// ─── 保留兼容别名 ────────────────────────────────────────────
+/** @deprecated 使用 requireOrgAccess 替代 */
+export const extractIdentity = requireOrgAccess;
 
 /**
  * 校验用户是否有权访问指定组织
@@ -133,8 +155,11 @@ async function verifyOrgAccess(userId: string, orgId: string): Promise<boolean> 
 /**
  * 构建数据库查询的隔离条件（供 API route 使用）
  * 所有业务查询必须附带此条件
+ *
+ * 使用示例：
+ *   where: { ...buildFilter(identity), status: 'active' }
  */
-export function buildIsolationFilter(identity: IdentityContext | null) {
+export function buildFilter(identity: IdentityContext | null) {
   if (!identity) {
     // 无身份信息 → 返回一个永远为 false 的条件（防止泄露数据）
     return { id: '__NO_ACCESS__' };
@@ -149,6 +174,9 @@ export function buildIsolationFilter(identity: IdentityContext | null) {
     tenantId: orgId,
   };
 }
+
+/** @deprecated 使用 buildFilter 替代 */
+export const buildIsolationFilter = buildFilter;
 
 /**
  * 验证请求中的身份是否与目标数据匹配（用于详情/修改/删除接口）

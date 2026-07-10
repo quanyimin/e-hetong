@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized, forbidden } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter, requireSameOrg } from '@/lib/identity-middleware';
 
 // GET: 获取单个合同详情
 export async function GET(
@@ -8,6 +9,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const id = params.id;
     if (!id) {
       return NextResponse.json({ code: 1, message: '缺少合同ID' }, { status: 400 });
@@ -28,10 +32,8 @@ export async function GET(
       return NextResponse.json({ code: 1, message: '合同不存在' }, { status: 404 });
     }
 
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    // TODO: Phase 2 迁移到 tenantId 校验
-    if (contract.userId !== currentUser.id) return forbidden('您无权访问该合同');
+    const orgError = requireSameOrg(identity, contract.identityType, contract.tenantId);
+    if (orgError) return orgError;
 
     const now = new Date();
     let status = 'active';
@@ -101,6 +103,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const id = params.id;
     const body = await request.json();
 
@@ -108,10 +113,8 @@ export async function PATCH(
     if (!contract) {
       return NextResponse.json({ code: 1, message: '合同不存在' }, { status: 404 });
     }
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    // TODO: Phase 2 迁移到 tenantId 校验
-    if (contract.userId !== currentUser.id) return forbidden('您无权修改该合同');
+    const orgError = requireSameOrg(identity, contract.identityType, contract.tenantId);
+    if (orgError) return orgError;
 
     const updateData: any = {};
     const allowedFields = ['name', 'type', 'partyA', 'partyB', 'startDate', 'endDate', 'remark'];

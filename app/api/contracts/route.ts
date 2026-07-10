@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized, forbidden } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 // GET: 获取合同列表
 export async function GET(request: NextRequest) {
+  const { identity, error } = await requireOrgAccess(request);
+  if (error) return error;
+
   const { searchParams } = new URL(request.url);
-  const tenantId = searchParams.get('tenantId');
   const page = parseInt(searchParams.get('page') || '1');
   const pageSize = parseInt(searchParams.get('pageSize') || '50');
   const search = searchParams.get('search') || '';
@@ -13,18 +16,7 @@ export async function GET(request: NextRequest) {
   const financialType = searchParams.get('financialType') || '';
   const status = searchParams.get('status') || '';
 
-  if (!tenantId) {
-    return NextResponse.json({ code: 1, message: '缺少tenantId参数' }, { status: 400 });
-  }
-
-  const currentUser = getCurrentUser(request);
-  if (!currentUser) return unauthorized();
-  const membership = await prisma.userTenantRole.findFirst({
-    where: { userId: currentUser.id, tenantId },
-  });
-  if (!membership) return forbidden('您无权访问该主体');
-
-  const where: any = { tenantId };
+  const where: any = { ...buildFilter(identity) };
   if (search) {
     where.OR = [
       { name: { contains: search } },
@@ -73,23 +65,16 @@ export async function GET(request: NextRequest) {
 // POST: 创建合同
 export async function POST(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const body = await request.json();
-    const tenantId = body.tenantId;
-
-    if (!tenantId) {
-      return NextResponse.json({ code: 1, message: '缺少tenantId' }, { status: 400 });
-    }
-
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    const membership = await prisma.userTenantRole.findFirst({
-      where: { userId: currentUser.id, tenantId },
-    });
-    if (!membership) return forbidden('您无权访问该主体');
 
     const contract = await prisma.contract.create({
       data: {
-        userId: currentUser.id,
+        userId: identity.userId,
+        identityType: identity.identityType,
+        tenantId: identity.orgId,
         name: body.name || '未命名合同',
         type: body.type || '',
         partyA: body.partyA || '',
@@ -116,21 +101,15 @@ export async function POST(request: NextRequest) {
 // DELETE: 删除合同
 export async function DELETE(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const tenantId = searchParams.get('tenantId');
 
     if (!id) return NextResponse.json({ code: 1, message: '缺少合同ID' }, { status: 400 });
-    if (!tenantId) return NextResponse.json({ code: 1, message: '缺少tenantId' }, { status: 400 });
 
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
-    const membership = await prisma.userTenantRole.findFirst({
-      where: { userId: currentUser.id, tenantId },
-    });
-    if (!membership) return forbidden('您无权访问该主体');
-
-    await prisma.contract.deleteMany({ where: { id, userId: currentUser.id } });
+    await prisma.contract.deleteMany({ where: { id, ...buildFilter(identity) } });
     return NextResponse.json({ code: 0, message: '合同已删除' });
   } catch (error) {
     return NextResponse.json({ code: 1, message: '删除失败' }, { status: 500 });

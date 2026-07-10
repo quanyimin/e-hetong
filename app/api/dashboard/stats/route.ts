@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, unauthorized, forbidden } from '@/lib/api-auth';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 import { startOfMonth, endOfMonth, subMonths, format, addDays } from 'date-fns';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-
-    const currentUser = getCurrentUser(request);
-    if (!currentUser) return unauthorized();
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
 
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
 
-    // TODO: Phase 2 迁移到 tenantId
-    const uid = currentUser.id;
     const [totalContracts, expiringCount, thisMonthUploads] = await Promise.all([
-      prisma.contract.count({ where: { userId: uid } }),
+      prisma.contract.count({ where: { ...buildFilter(identity) } }),
       prisma.contract.count({
         where: {
-          userId: uid,
+          ...buildFilter(identity),
           endDate: {
             gte: now,
             lte: addDays(now, 30),
@@ -29,17 +26,17 @@ export async function GET(request: NextRequest) {
       }),
       prisma.contract.count({
         where: {
-          userId: uid,
+          ...buildFilter(identity),
           createdAt: { gte: monthStart, lte: monthEnd },
         },
       }),
     ]);
 
-    const pendingReminders = await prisma.reminder.count({ where: { userId: uid, sendStatus: 'PENDING' } });
+    const pendingReminders = await prisma.reminder.count({ where: { ...buildFilter(identity), sendStatus: 'PENDING' } });
 
     // 2. 合同类型分布
     const contracts = await prisma.contract.findMany({
-      where: { userId: uid },
+      where: { ...buildFilter(identity) },
       select: { type: true, amount: true, endDate: true, createdAt: true },
     });
 
@@ -56,7 +53,7 @@ export async function GET(request: NextRequest) {
       const start = startOfMonth(m);
       const end = endOfMonth(m);
       const count = await prisma.contract.count({
-        where: { userId: uid, createdAt: { gte: start, lte: end } },
+        where: { ...buildFilter(identity), createdAt: { gte: start, lte: end } },
       });
       monthlyTrend.push({ month: format(m, 'yyyy-MM'), count });
     }
@@ -72,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     // 6. 最近合同
     const recentContracts = await prisma.contract.findMany({
-      where: { userId: uid },
+      where: { ...buildFilter(identity) },
       orderBy: { updatedAt: 'desc' },
       take: 5,
       select: {
@@ -82,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     // 7. 待办提醒
     const upcomingReminders = await prisma.reminder.findMany({
-      where: { userId: uid, sendStatus: 'PENDING' },
+      where: { ...buildFilter(identity), sendStatus: 'PENDING' },
       orderBy: { remindAt: 'asc' },
       take: 5,
       include: { contract: { select: { id: true, name: true } } },

@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 // GET /api/bills - 获取账单列表
 export async function GET(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const contractId = searchParams.get('contractId');
     const type = searchParams.get('type'); // INCOME | EXPENSE
@@ -11,7 +15,7 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenantId');
     const partnerId = searchParams.get('partnerId');
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { ...buildFilter(identity) };
     if (contractId) where.contractId = contractId;
     if (type) where.type = type;
     if (status) where.status = status;
@@ -51,6 +55,9 @@ export async function GET(request: NextRequest) {
 // POST /api/bills - 创建账单（或自动从合同生成）
 export async function POST(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const body = await request.json();
     
     // 从合同自动生成账单
@@ -78,7 +85,8 @@ export async function POST(request: NextRequest) {
       const bill = await prisma.bill.create({
         data: {
           contractId: contract.id,
-          tenantId: contract.tenantId,
+          tenantId: identity.orgId,
+          identityType: identity.identityType,
           partnerId: contract.partnerId,
           title: `${contract.name} - ${direction === 'INCOME' ? '应收' : '应付'}款`,
           amount: contract.amount,
@@ -99,7 +107,8 @@ export async function POST(request: NextRequest) {
     const bill = await prisma.bill.create({
       data: {
         contractId: body.contractId,
-        tenantId: body.tenantId,
+        tenantId: identity.orgId,
+        identityType: identity.identityType,
         partnerId: body.partnerId,
         title: body.title,
         amount: body.amount,

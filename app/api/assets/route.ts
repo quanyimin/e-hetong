@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 // GET /api/assets - 资产列表
 export async function GET(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const type = searchParams.get('type');
     const tenantId = searchParams.get('tenantId');
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { ...buildFilter(identity) };
     if (userId) where.userId = userId;
     if (type) where.type = type;
     if (tenantId) where.tenantId = tenantId;
@@ -38,11 +42,15 @@ export async function GET(request: NextRequest) {
 // POST /api/assets - 创建资产
 export async function POST(request: NextRequest) {
   try {
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return error;
+
     const body = await request.json();
     const asset = await prisma.asset.create({
       data: {
         userId: body.userId,
-        tenantId: body.tenantId,
+        tenantId: identity.orgId,
+        identityType: identity.identityType,
         name: body.name,
         type: body.type,
         identifier: body.identifier,

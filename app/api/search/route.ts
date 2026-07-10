@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { requireOrgAccess, buildFilter } from '@/lib/identity-middleware';
 
 // 自然语言 → SQL 过滤条件（简单 NLP 解析）
 function parseNaturalLanguage(q: string): {
@@ -81,10 +82,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: [] });
     }
 
-    const userId = request.cookies.get('user_id')?.value;
-    if (!userId) {
-      return NextResponse.json({ success: true, data: [] });
-    }
+    const { identity, error } = await requireOrgAccess(request);
+    if (error) return NextResponse.json({ success: true, data: [] });
 
     // ========== 语义模式：自然语言解析 ==========
     let parsedFilter;
@@ -95,7 +94,7 @@ export async function GET(request: NextRequest) {
     const searchQ = (mode === 'semantic' && parsedFilter?.textFilter) || q;
 
     // ========== 搜索合同 ==========
-    const contractWhere: Record<string, unknown> = { userId };
+    const contractWhere: Record<string, unknown> = { ...buildFilter(identity) };
 
     if (mode === 'semantic' && parsedFilter) {
       const OR: Record<string, unknown>[] = [];
@@ -179,7 +178,7 @@ export async function GET(request: NextRequest) {
     if (scope === 'all' || scope === 'partner') {
       const partners = await prisma.partner.findMany({
         where: {
-          userId,
+          ...buildFilter(identity),
           OR: [
             { name: { contains: searchQ } },
             { company: { contains: searchQ } },
@@ -205,7 +204,7 @@ export async function GET(request: NextRequest) {
     if (scope === 'all' || scope === 'asset') {
       const assets = await prisma.asset.findMany({
         where: {
-          userId,
+          ...buildFilter(identity),
           OR: [
             { name: { contains: searchQ } },
             { identifier: { contains: searchQ } },
