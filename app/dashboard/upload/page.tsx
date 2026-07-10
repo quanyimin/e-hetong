@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { extractTextFromFile } from '@/lib/file-text-extractor';
 import { getPreviewType, docxToHtml, readFileAsArrayBuffer, getPdfBlobUrl } from '@/lib/file-preview';
+import { uploadFile } from '@/lib/client-upload';
 import {
   Upload, FileText, X, CheckCircle2, Loader2, AlertCircle, Brain, Sparkles,
   Camera, Crown, AlertTriangle, Save, Eye, DollarSign, Tag, Maximize2, ExternalLink,
@@ -203,6 +204,17 @@ export default function UploadContractPage() {
     const file = files.find((f) => f.id === fileId);
     if (!file) return;
     try {
+      // 先上传文件到隔离存储
+      let fileUrl = '';
+      try {
+        if (file.file) {
+          const uploadResult = await uploadFile(file.file);
+          fileUrl = uploadResult.publicUrl;
+        }
+      } catch (uploadErr) {
+        console.warn('文件上传失败，跳过:', uploadErr);
+      }
+
       await fetch('/api/contracts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,6 +227,7 @@ export default function UploadContractPage() {
           keyClauses: JSON.stringify(file.confirmedData?.keyClauses || []),
           riskAlerts: JSON.stringify(file.confirmedData?.riskAlerts || []),
           fileType: file.ext, archived: true,
+          fileUrl: fileUrl || file.ext || '',
         }),
       });
     } catch (e) { console.error('保存失败', e); }

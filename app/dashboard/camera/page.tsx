@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Camera, Upload, RotateCcw, Check, AlertCircle, Loader2, FileText, Scan, BadgeCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { uploadBase64Image } from '@/lib/client-upload';
 
 export default function CameraPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -158,6 +159,15 @@ export default function CameraPage() {
     setError(null);
     try {
       if (archiveTarget === 'license') {
+        // 先上传文件到隔离存储
+        let attachmentUrl = capturedImage;
+        try {
+          const uploadResult = await uploadBase64Image(capturedImage, `license_${Date.now()}.jpg`);
+          attachmentUrl = uploadResult.publicUrl;
+        } catch (uploadErr) {
+          console.warn('文件上传失败，使用 base64 兜底:', uploadErr);
+        }
+
         // 归档到证照管理
         const licenseRes = await fetch(`/api/licenses?tenantId=${encodeURIComponent(tenantId)}`, {
           method: 'POST',
@@ -168,7 +178,7 @@ export default function CameraPage() {
             issuingAuthority: licenseForm.issuingAuthority,
             expireDate: licenseForm.validUntil,
             licenseNumber: licenseForm.licenseNumber,
-            attachmentUrl: capturedImage,
+            attachmentUrl,
             files: JSON.stringify([capturedImage]),
             metadata: JSON.stringify({ ocrText }),
           }),
@@ -182,6 +192,15 @@ export default function CameraPage() {
         // 跳转到证照列表
         router.push('/dashboard/licenses');
       } else {
+        // 先上传文件到隔离存储
+        let fileUrl = capturedImage;
+        try {
+          const uploadResult = await uploadBase64Image(capturedImage, `contract_${Date.now()}.jpg`);
+          fileUrl = uploadResult.publicUrl;
+        } catch (uploadErr) {
+          console.warn('文件上传失败，使用 base64 兜底:', uploadErr);
+        }
+
         // 归档到合同管理
         const contractRes = await fetch(`/api/contracts?tenantId=${encodeURIComponent(tenantId)}`, {
           method: 'POST',
@@ -190,7 +209,7 @@ export default function CameraPage() {
             name: '拍照合同' + new Date().toLocaleDateString('zh-CN'),
             ocrText: ocrText,
             source: 'CAMERA_OCR',
-            fileUrl: capturedImage,
+            fileUrl,
           }),
         });
 
