@@ -166,11 +166,11 @@ export default function CameraPage() {
             name: licenseForm.name || '拍照证照' + new Date().toLocaleDateString('zh-CN'),
             type: licenseForm.type,
             issuingAuthority: licenseForm.issuingAuthority,
-            validUntil: licenseForm.validUntil,
+            expireDate: licenseForm.validUntil,
             licenseNumber: licenseForm.licenseNumber,
             attachmentUrl: capturedImage,
             files: JSON.stringify([capturedImage]),
-            ocrText: ocrText,
+            metadata: JSON.stringify({ ocrText }),
           }),
         });
 
