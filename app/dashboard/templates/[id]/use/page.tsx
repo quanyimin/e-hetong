@@ -196,6 +196,13 @@ export default function UseTemplatePage() {
     console.log('窗口宽度:', window.innerWidth + 'px');
     console.log('当前状态:', aiPanelOpen ? '已打开' : '已关闭');
 
+    // 直接处理body overflow，确保立即生效
+    if (targetState) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
     setAiPanelOpen(targetState);
 
     requestAnimationFrame(() => {
