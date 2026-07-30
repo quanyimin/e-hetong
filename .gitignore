@@ -8,3 +8,11 @@ node_modules/
 .DS_Store
 *.log
 .vercel
+.env*
+# 保留环境变量示例模板(.env.example)供团队共享,不被 .env* 规则忽略
+!.env.example
+
+# 监督机器人运行时文件
+.supervisor.pid
+supervisor-report.txt
+supervisor-report.json

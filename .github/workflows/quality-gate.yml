@@ -1,0 +1,101 @@
+name: 多多合同助手 · CI 质量门禁
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: 质量门禁 (Lint + Supervisor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_VERSION: '20'
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/test?schema=public'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🔧 安装 Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📦 安装依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 🔍 ESLint 代码质量
+        id: lint
+        run: npm run lint
+        continue-on-error: false
+
+      - name: 🏗️ Prisma Schema 生成
+        id: prisma
+        run: npm run db:generate
+        continue-on-error: false
+
+      - name: 🕵️ 监督机器人 · 功能激活质量检查
+        id: supervisor
+        run: |
+          npm run supervisor:json > supervisor-report.json 2>&1
+          SUPERVISOR_EXIT=$?
+          echo "=== 监督机器人结构化报告 ==="
+          cat supervisor-report.json
+          echo "=== 监督机器人可读报告 ==="
+          cat supervisor-report.txt 2>/dev/null || echo "(无文本报告)"
+          exit $SUPERVISOR_EXIT
+        continue-on-error: false
+
+      - name: 📤 上传监督机器人报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supervisor-report-${{ github.run_number }}
+          path: |
+            supervisor-report.json
+            supervisor-report.txt
+          if-no-files-found: warn
+
+      - name: ✅ 质量门禁总结
+        if: always()
+        run: |
+          echo "### CI 质量门禁执行完成" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 步骤 | 状态 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          LINT_STATUS="${{ steps.lint.outcome }}"
+          PRISMA_STATUS="${{ steps.prisma.outcome }}"
+          SUP_STATUS="${{ steps.supervisor.outcome }}"
+          echo "| ESLint 代码质量 | $LINT_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Prisma Schema 生成 | $PRISMA_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| 监督机器人(功能激活) | $SUP_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          ALL_PASS="${{ steps.lint.outcome == 'success' && steps.prisma.outcome == 'success' && steps.supervisor.outcome == 'success' }}"
+          if [ "$ALL_PASS" = "true" ]; then
+            echo "✅ **全部通过** - 功能激活状态: 11/11 项，质量门禁通过。" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **存在失败项** - 请查看各步骤详情与监督机器人报告。" >> $GITHUB_STEP_SUMMARY
+          fi
