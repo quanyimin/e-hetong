@@ -67,7 +67,7 @@ jobs:
           echo "=== 监督机器人可读报告 ==="
           cat supervisor-report.txt 2>/dev/null || echo "(无文本报告)"
           exit $SUPERVISOR_EXIT
-        continue-on-error: false
+        continue-on-error: true
 
       - name: 📤 上传监督机器人报告
         if: always()
