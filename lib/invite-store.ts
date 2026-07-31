@@ -27,10 +27,9 @@ export function createInvite(
   tenantId: string,
   role: string,
   createdBy: string,
-  ttlMs: number = 7 * 24 * 60 * 60 * 1000 // 默认 7 天有效期
+  ttlMs: number = 7 * 24 * 60 * 60 * 1000
 ): InviteRecord {
   let code = generateCode();
-  // 避免碰撞
   while (store.has(code)) {
     code = generateCode();
   }
@@ -54,7 +53,7 @@ export function getInvite(code: string): InviteRecord | undefined {
   return store.get(code);
 }
 
-export function useInvite(code: string, userId: string): boolean {
+export function consumeInvite(code: string, userId: string): boolean {
   const record = store.get(code);
   if (!record) return false;
   if (record.used) return false;
