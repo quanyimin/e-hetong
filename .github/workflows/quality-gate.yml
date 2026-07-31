@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NODE_VERSION: '20'
+      NODE_VERSION: '22'
       DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/test?schema=public'
 
     services:
@@ -57,7 +57,7 @@ jobs:
         run: npm run db:generate
         continue-on-error: false
 
-      - name: 🕵️ 监督机器人 · 功能激活质量检查
+      - name: 🕵️ 监督机器人 · 功能激活质量检查（阻断不合格代码）
         id: supervisor
         run: |
           npm run supervisor:json > supervisor-report.json 2>&1
@@ -67,7 +67,7 @@ jobs:
           echo "=== 监督机器人可读报告 ==="
           cat supervisor-report.txt 2>/dev/null || echo "(无文本报告)"
           exit $SUPERVISOR_EXIT
-        continue-on-error: true
+        continue-on-error: false
 
       - name: 📤 上传监督机器人报告
         if: always()
