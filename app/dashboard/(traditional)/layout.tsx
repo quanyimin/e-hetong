@@ -98,6 +98,20 @@ function TopNavDropdown({ item, pathname }: { item: MenuItem; pathname: string }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 检查是否有 subGroup 分组（必须在 early return 之前调用 hooks）
+  const hasSubGroups = item.children?.some(c => c.subGroup);
+  // 按 subGroup 分组
+  const groupedChildren = React.useMemo(() => {
+    if (!hasSubGroups || !item.children) return null;
+    const groups: Record<string, MenuItem[]> = {};
+    item.children.forEach(child => {
+      const sg = child.subGroup || 'OTHER';
+      if (!groups[sg]) groups[sg] = [];
+      groups[sg].push(child);
+    });
+    return groups;
+  }, [item.children, hasSubGroups]);
+
   if (!hasChildren) {
     return (
       <Link
@@ -117,20 +131,6 @@ function TopNavDropdown({ item, pathname }: { item: MenuItem; pathname: string }
       </Link>
     );
   }
-
-  // 检查是否有 subGroup 分组
-  const hasSubGroups = item.children?.some(c => c.subGroup);
-  // 按 subGroup 分组
-  const groupedChildren = React.useMemo(() => {
-    if (!hasSubGroups || !item.children) return null;
-    const groups: Record<string, MenuItem[]> = {};
-    item.children.forEach(child => {
-      const sg = child.subGroup || 'OTHER';
-      if (!groups[sg]) groups[sg] = [];
-      groups[sg].push(child);
-    });
-    return groups;
-  }, [item.children, hasSubGroups]);
 
   return (
     <div
